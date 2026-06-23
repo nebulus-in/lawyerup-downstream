@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:open_filex/open_filex.dart';
 import '../legal_theme.dart';
+import '../../bloc/legal_bloc.dart';
 import '../../../models/legal_models.dart';
 import 'legal_modals.dart';
 
@@ -66,8 +69,9 @@ class DetailHeader extends StatelessWidget {
 }
 
 class FileItem extends StatelessWidget {
+  final int caseId;
   final CaseFile file;
-  const FileItem({super.key, required this.file});
+  const FileItem({super.key, required this.caseId, required this.file});
 
   /// Opens a locally stored document with the system viewer, surfacing a clear
   /// message when nothing can handle it.
@@ -86,54 +90,62 @@ class FileItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final openable = file.isLocal;
+    final isLongPressed = context.select((LegalBloc bloc) => bloc.state.longPressedId == file.id);
 
-    final content = Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: LegalTheme.cardDecoration(),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-                color: openable ? LegalTheme.blueBg : const Color(0xFFF0F2F5),
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(
-                openable ? Icons.picture_as_pdf_rounded : Icons.description,
-                color: openable ? LegalTheme.blue : const Color(0xFFAAB2BF),
-                size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(file.name,
-                    style: const TextStyle(
-                        fontSize: 13.5, fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                Text('${file.size} • ${file.date}',
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: LegalTheme.muted)),
-              ],
-            ),
-          ),
-          if (openable)
-            const Icon(Icons.open_in_new_rounded,
-                color: LegalTheme.muted, size: 16),
-        ],
-      ),
-    );
-
-    if (!openable) return content;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _open(context),
-      child: content,
+      onTap: openable ? () => _open(context) : null,
+      onLongPress: () async {
+        HapticFeedback.mediumImpact();
+        final bloc = context.read<LegalBloc>();
+        bloc.add(LongPressedIdChanged(file.id));
+        await LegalModals.showFileOptions(context, caseId, file);
+        bloc.add(const LongPressedIdChanged(null));
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: LegalTheme.cardDecoration(
+          border: isLongPressed ? Border.all(color: LegalTheme.blue, width: 2) : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                  color: openable ? LegalTheme.blueBg : const Color(0xFFF0F2F5),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(
+                  openable ? Icons.picture_as_pdf_rounded : Icons.description,
+                  color: openable ? LegalTheme.blue : const Color(0xFFAAB2BF),
+                  size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(file.name,
+                      style: const TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text('${file.size} • ${file.date}',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: LegalTheme.muted)),
+                ],
+              ),
+            ),
+            if (openable)
+              const Icon(Icons.open_in_new_rounded,
+                  color: LegalTheme.muted, size: 16),
+          ],
+        ),
+      ),
     );
   }
 }

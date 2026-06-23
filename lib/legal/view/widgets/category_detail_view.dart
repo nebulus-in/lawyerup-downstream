@@ -68,7 +68,7 @@ class CategoryDetailView extends StatelessWidget {
                   : ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
-                        ...cat.files.map((file) => FileItem(file: file)),
+                        ...cat.files.map((file) => FileItem(caseId: selectedCase.id, file: file)),
                         const SizedBox(height: 80),
                       ],
                     ),

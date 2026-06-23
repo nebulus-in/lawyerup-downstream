@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/legal_bloc.dart';
@@ -68,7 +69,7 @@ class CaseDetailView extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   ...selectedCase.categories
-                      .map((cat) => _CategoryItem(cat: cat)),
+                      .map((cat) => _CategoryItem(caseId: selectedCase.id, cat: cat)),
                   if (selectedCase.uncategorizedFiles.isNotEmpty) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
@@ -77,7 +78,7 @@ class CaseDetailView extends StatelessWidget {
                               fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                     ...selectedCase.uncategorizedFiles
-                        .map((file) => FileItem(file: file)),
+                        .map((file) => FileItem(caseId: selectedCase.id, file: file)),
                   ],
                   const SizedBox(height: 80),
                 ],
@@ -229,21 +230,33 @@ class _FactDivider extends StatelessWidget {
 }
 
 class _CategoryItem extends StatelessWidget {
+  final int caseId;
   final Category cat;
-  const _CategoryItem({required this.cat});
+  const _CategoryItem({required this.caseId, required this.cat});
 
   @override
   Widget build(BuildContext context) {
     final color = LegalTheme.getCategoryColor(cat.id);
     final bg = LegalTheme.getCategoryBg(cat.id);
+    final isLongPressed = context.select((LegalBloc bloc) => bloc.state.longPressedId == cat.id);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => context.read<LegalBloc>().add(CategorySelected(cat.id)),
-      child: Container(
+      onLongPress: () async {
+        HapticFeedback.mediumImpact();
+        final bloc = context.read<LegalBloc>();
+        bloc.add(LongPressedIdChanged(cat.id));
+        await LegalModals.showCategoryOptions(context, caseId, cat);
+        bloc.add(const LongPressedIdChanged(null));
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: LegalTheme.cardDecoration(),
+        decoration: LegalTheme.cardDecoration(
+          border: isLongPressed ? Border.all(color: LegalTheme.blue, width: 2) : null,
+        ),
         child: Row(
           children: [
             Container(

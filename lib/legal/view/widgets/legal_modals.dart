@@ -295,6 +295,94 @@ class LegalModals {
     );
   }
 
+  static void showRenameCategoryModal(BuildContext context, int caseId, Category cat) {
+    final controller = TextEditingController(text: cat.name);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(modalContext).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: LegalTheme.sheetDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Rename Folder',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              _buildInput('FOLDER NAME', 'e.g. Evidence', controller),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  context
+                      .read<LegalBloc>()
+                      .add(CategoryRenamed(caseId, cat.id, controller.text));
+                  Navigator.pop(modalContext);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: LegalTheme.blue,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Save Changes',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static void showRenameFileModal(BuildContext context, int caseId, CaseFile file) {
+    final controller = TextEditingController(text: file.name);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(modalContext).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: LegalTheme.sheetDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Rename Document',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              _buildInput('DOCUMENT NAME', 'e.g. Witness_Statement.pdf', controller),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  context
+                      .read<LegalBloc>()
+                      .add(FileRenamed(caseId, file.id, controller.text));
+                  Navigator.pop(modalContext);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: LegalTheme.blue,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Save Changes',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Offers the two ways to add a document — scan a physical one, or upload an
   /// existing file. [destinationLabel] names where it lands (a case or folder).
   static void showAddDocumentSheet(
@@ -351,6 +439,209 @@ class LegalModals {
                 Navigator.pop(modalContext);
                 context.read<LegalBloc>().add(FileUploaded(caseId, categoryName));
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Future<void> showCaseOptions(BuildContext context, Case c) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            Text(c.name,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(c.number,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    color: LegalTheme.muted,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            _OptionRow(
+              icon: Icons.edit_outlined,
+              label: 'Edit details',
+              onTap: () {
+                Navigator.pop(modalContext);
+                showEditCaseModal(context, c);
+              },
+            ),
+            _OptionRow(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete case',
+              isDestructive: true,
+              onTap: () {
+                Navigator.pop(modalContext);
+                context.read<LegalBloc>().add(CaseDeleted(c.id));
+                snack(context, 'Case deleted');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Future<void> showCategoryOptions(BuildContext context, int caseId, Category cat) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            Text(cat.name,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text('Folder options',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: LegalTheme.muted,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            _OptionRow(
+              icon: Icons.drive_file_rename_outline_rounded,
+              label: 'Rename folder',
+              onTap: () {
+                Navigator.pop(modalContext);
+                showRenameCategoryModal(context, caseId, cat);
+              },
+            ),
+            _OptionRow(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete folder',
+              subtitle: 'Files inside will move to uncategorized',
+              isDestructive: true,
+              onTap: () {
+                Navigator.pop(modalContext);
+                context.read<LegalBloc>().add(CategoryDeleted(caseId, cat.id));
+                snack(context, 'Folder deleted');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Future<void> showFileOptions(BuildContext context, int caseId, CaseFile file) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            Text(file.name,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Text('${file.size} · ${file.date}',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    color: LegalTheme.muted,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            _OptionRow(
+              icon: Icons.drive_file_rename_outline_rounded,
+              label: 'Rename document',
+              onTap: () {
+                Navigator.pop(modalContext);
+                showRenameFileModal(context, caseId, file);
+              },
+            ),
+            _OptionRow(
+              icon: Icons.move_to_inbox_rounded,
+              label: 'Move to folder',
+              onTap: () {
+                Navigator.pop(modalContext);
+                _showMoveFileSheet(context, caseId, file);
+              },
+            ),
+            _OptionRow(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete document',
+              isDestructive: true,
+              onTap: () {
+                Navigator.pop(modalContext);
+                context.read<LegalBloc>().add(FileDeleted(caseId, file.id));
+                snack(context, 'Document deleted');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static void _showMoveFileSheet(BuildContext context, int caseId, CaseFile file) {
+    final state = context.read<LegalBloc>().state;
+    final c = state.cases.firstWhere((c) => c.id == caseId);
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            const Text('Move document',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Select a destination folder in ${c.name}',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    color: LegalTheme.muted,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(modalContext);
+                      context.read<LegalBloc>().add(FileMoved(caseId, file.id, null));
+                      snack(context, 'Document moved to General');
+                    },
+                    child: const _FolderPickerItem(name: 'General (Uncategorized)'),
+                  ),
+                  ...c.categories.map((cat) => GestureDetector(
+                        onTap: () {
+                          Navigator.pop(modalContext);
+                          context.read<LegalBloc>().add(FileMoved(caseId, file.id, cat.name));
+                          snack(context, 'Document moved to ${cat.name}');
+                        },
+                        child: _FolderPickerItem(name: cat.name),
+                      )),
+                ],
+              ),
             ),
           ],
         ),
@@ -549,7 +840,7 @@ class LegalModals {
                           ));
                       snack(context, 'Text saved to ${c.name}');
                     },
-                    child: _FolderPickerItem(name: 'General (Uncategorized)'),
+                    child: const _FolderPickerItem(name: 'General (Uncategorized)'),
                   ),
                   ...c.categories.map((cat) => GestureDetector(
                         onTap: () {
@@ -630,6 +921,56 @@ class LegalModals {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OptionRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  final bool isDestructive;
+  final VoidCallback onTap;
+
+  const _OptionRow({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+    this.isDestructive = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? const Color(0xFFE03A1E) : LegalTheme.ink;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600, color: color)),
+                  if (subtitle != null)
+                    Text(subtitle!,
+                        style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: LegalTheme.muted)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

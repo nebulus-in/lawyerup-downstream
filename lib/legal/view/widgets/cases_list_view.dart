@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/legal_bloc.dart';
@@ -64,13 +65,26 @@ class _CaseItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLongPressed = context.select((LegalBloc bloc) => bloc.state.longPressedId == c.id);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => context.read<LegalBloc>().add(CaseSelected(c.id)),
-      child: Container(
+      onLongPress: () async {
+        HapticFeedback.mediumImpact();
+        final bloc = context.read<LegalBloc>();
+        bloc.add(LongPressedIdChanged(c.id));
+        await LegalModals.showCaseOptions(context, c);
+        bloc.add(const LongPressedIdChanged(null));
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: LegalTheme.cardDecoration(blur: 16),
+        decoration: LegalTheme.cardDecoration(
+          blur: 16,
+          border: isLongPressed ? Border.all(color: LegalTheme.blue, width: 2) : null,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

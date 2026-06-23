@@ -171,6 +171,11 @@ class LegalRepository {
     );
   }
 
+  Future<List<Case>> deleteCase(int caseId) async {
+    _cases = _cases.where((c) => c.id != caseId).toList();
+    return List.unmodifiable(_cases);
+  }
+
   Future<List<Case>> scheduleHearing(int caseId, String hearing) async {
     return _apply(caseId, (c) => c.copyWith(hearing: hearing));
   }
@@ -182,6 +187,30 @@ class LegalRepository {
       docs: 0,
     );
     return _apply(caseId, (c) => c.addCategory(category));
+  }
+
+  Future<List<Case>> renameCategory(int caseId, int categoryId, String newName) async {
+    return _apply(caseId, (c) {
+      final categories = c.categories.map((cat) {
+        if (cat.id == categoryId) {
+          return cat.copyWith(name: newName);
+        }
+        return cat;
+      }).toList();
+      return c.copyWith(categories: categories);
+    });
+  }
+
+  Future<List<Case>> deleteCategory(int caseId, int categoryId) async {
+    return _apply(caseId, (c) {
+      final catToDelete = c.categories.firstWhere((cat) => cat.id == categoryId);
+      final categories = c.categories.where((cat) => cat.id != categoryId).toList();
+      final uncategorized = [...c.uncategorizedFiles, ...catToDelete.files];
+      return c.copyWith(
+        categories: categories,
+        uncategorizedFiles: uncategorized,
+      );
+    });
   }
 
   Future<List<Case>> uploadFile(int caseId, String? categoryName) async {
@@ -221,6 +250,95 @@ class LegalRepository {
       date: 'Just now',
     );
     return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
+  }
+
+  Future<List<Case>> renameFile(int caseId, int fileId, String newName) async {
+    return _apply(caseId, (c) {
+      final uncategorized = c.uncategorizedFiles.map((f) {
+        return f.id == fileId ? f.copyWith(name: newName) : f;
+      }).toList();
+      
+      final categories = c.categories.map((cat) {
+        final files = cat.files.map((f) {
+          return f.id == fileId ? f.copyWith(name: newName) : f;
+        }).toList();
+        return cat.copyWith(files: files);
+      }).toList();
+      
+      return c.copyWith(
+        uncategorizedFiles: uncategorized,
+        categories: categories,
+      );
+    });
+  }
+
+  Future<List<Case>> deleteFile(int caseId, int fileId) async {
+    return _apply(caseId, (c) {
+      final uncategorized = c.uncategorizedFiles.where((f) => f.id != fileId).toList();
+      final categories = c.categories.map((cat) {
+        final files = cat.files.where((f) => f.id != fileId).toList();
+        return cat.copyWith(files: files, docs: files.length);
+      }).toList();
+      
+      int totalDocs = uncategorized.length;
+      for (final cat in categories) {
+        totalDocs += cat.files.length;
+      }
+          
+      return c.copyWith(
+        uncategorizedFiles: uncategorized,
+        categories: categories,
+        docs: totalDocs,
+      );
+    });
+  }
+
+  Future<List<Case>> moveFile(int caseId, int fileId, String? targetCategoryName) async {
+    return _apply(caseId, (c) {
+      CaseFile? targetFile;
+      
+      // Find and remove the file from its current location
+      final uncategorizedOld = c.uncategorizedFiles.where((f) {
+        if (f.id == fileId) {
+          targetFile = f;
+          return false;
+        }
+        return true;
+      }).toList();
+      
+      final categoriesOld = c.categories.map((cat) {
+        final files = cat.files.where((f) {
+          if (f.id == fileId) {
+            targetFile = f;
+            return false;
+          }
+          return true;
+        }).toList();
+        return cat.copyWith(files: files, docs: files.length);
+      }).toList();
+      
+      if (targetFile == null) return c;
+      
+      // Add it to the new location
+      if (targetCategoryName == null || targetCategoryName == 'Uncategorized') {
+        return c.copyWith(
+          uncategorizedFiles: [...uncategorizedOld, targetFile!],
+          categories: categoriesOld,
+        );
+      } else {
+        final categoriesNew = categoriesOld.map((cat) {
+          if (cat.name == targetCategoryName) {
+            final files = [...cat.files, targetFile!];
+            return cat.copyWith(files: files, docs: files.length);
+          }
+          return cat;
+        }).toList();
+        return c.copyWith(
+          uncategorizedFiles: uncategorizedOld,
+          categories: categoriesNew,
+        );
+      }
+    });
   }
 
   /// Replaces the case matching [caseId] with [transform] applied to it and

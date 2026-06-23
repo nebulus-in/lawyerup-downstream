@@ -36,6 +36,13 @@ class DateSelected extends LegalEvent {
   List<Object?> get props => [date];
 }
 
+class LongPressedIdChanged extends LegalEvent {
+  final int? id;
+  const LongPressedIdChanged(this.id);
+  @override
+  List<Object?> get props => [id];
+}
+
 class CaseCreated extends LegalEvent {
   final String name;
   final String number;
@@ -73,6 +80,13 @@ class CaseUpdated extends LegalEvent {
   List<Object?> get props => [caseId, name, number, court, type, hearing];
 }
 
+class CaseDeleted extends LegalEvent {
+  final int caseId;
+  const CaseDeleted(this.caseId);
+  @override
+  List<Object?> get props => [caseId];
+}
+
 class CaseScheduled extends LegalEvent {
   final int caseId;
   final String hearing;
@@ -87,6 +101,23 @@ class CategoryAdded extends LegalEvent {
   const CategoryAdded(this.caseId, this.name);
   @override
   List<Object?> get props => [caseId, name];
+}
+
+class CategoryRenamed extends LegalEvent {
+  final int caseId;
+  final int categoryId;
+  final String newName;
+  const CategoryRenamed(this.caseId, this.categoryId, this.newName);
+  @override
+  List<Object?> get props => [caseId, categoryId, newName];
+}
+
+class CategoryDeleted extends LegalEvent {
+  final int caseId;
+  final int categoryId;
+  const CategoryDeleted(this.caseId, this.categoryId);
+  @override
+  List<Object?> get props => [caseId, categoryId];
 }
 
 class FileUploaded extends LegalEvent {
@@ -121,4 +152,30 @@ class OcrTextSaved extends LegalEvent {
 
   @override
   List<Object?> get props => [caseId, categoryName, text, fileName];
+}
+
+class FileRenamed extends LegalEvent {
+  final int caseId;
+  final int fileId;
+  final String newName;
+  const FileRenamed(this.caseId, this.fileId, this.newName);
+  @override
+  List<Object?> get props => [caseId, fileId, newName];
+}
+
+class FileDeleted extends LegalEvent {
+  final int caseId;
+  final int fileId;
+  const FileDeleted(this.caseId, this.fileId);
+  @override
+  List<Object?> get props => [caseId, fileId];
+}
+
+class FileMoved extends LegalEvent {
+  final int caseId;
+  final int fileId;
+  final String? targetCategoryName;
+  const FileMoved(this.caseId, this.fileId, this.targetCategoryName);
+  @override
+  List<Object?> get props => [caseId, fileId, targetCategoryName];
 }

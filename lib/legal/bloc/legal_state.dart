@@ -12,6 +12,10 @@ class LegalState extends Equatable {
   final DateTime? selectedDate;
   final List<Case> cases;
   final List<Case> upcomingHearings;
+  
+  /// The ID of the item (Case, Category, or CaseFile) currently being acted 
+  /// upon (e.g. while an options modal is open). Used to show a selection border.
+  final int? longPressedId;
 
   /// Transient, one-shot error message for the UI to surface (e.g. a SnackBar).
   /// Unlike the other fields it is *not* preserved across [copyWith] calls — it
@@ -27,6 +31,7 @@ class LegalState extends Equatable {
     this.selectedDate,
     this.cases = const [],
     this.upcomingHearings = const [],
+    this.longPressedId,
     this.errorMessage,
   });
 
@@ -39,6 +44,7 @@ class LegalState extends Equatable {
         selectedDate,
         cases,
         upcomingHearings,
+        longPressedId,
         errorMessage,
       ];
 
@@ -50,6 +56,7 @@ class LegalState extends Equatable {
     Object? selectedDate = _undefined,
     List<Case>? cases,
     List<Case>? upcomingHearings,
+    Object? longPressedId = _undefined,
     // Transient: intentionally *not* preserved. Any copyWith that doesn't pass
     // it clears the message, so it only lives for the single emit that sets it.
     String? errorMessage,
@@ -68,6 +75,9 @@ class LegalState extends Equatable {
           : selectedDate as DateTime?,
       cases: cases ?? this.cases,
       upcomingHearings: upcomingHearings ?? this.upcomingHearings,
+      longPressedId: identical(longPressedId, _undefined)
+          ? this.longPressedId
+          : longPressedId as int?,
       errorMessage: errorMessage,
     );
   }

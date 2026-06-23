@@ -23,6 +23,21 @@ class CaseFile extends Equatable {
 
   @override
   List<Object?> get props => [id, name, size, date, path];
+
+  CaseFile copyWith({
+    String? name,
+    String? size,
+    String? date,
+    String? path,
+  }) {
+    return CaseFile(
+      id: id,
+      name: name ?? this.name,
+      size: size ?? this.size,
+      date: date ?? this.date,
+      path: path ?? this.path,
+    );
+  }
 }
 
 class Category extends Equatable {
@@ -43,10 +58,10 @@ class Category extends Equatable {
   @override
   List<Object?> get props => [id, name, docs, files];
 
-  Category copyWith({List<CaseFile>? files, int? docs}) {
+  Category copyWith({String? name, List<CaseFile>? files, int? docs}) {
     return Category(
       id: id,
-      name: name,
+      name: name ?? this.name,
       docs: docs ?? this.docs,
 
       files: files ?? this.files,

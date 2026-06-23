@@ -66,9 +66,11 @@ class LegalTheme {
     double opacity = 0.06,
     double dy = 4,
     Color color = Colors.white,
+    BoxBorder? border,
   }) {
     return BoxDecoration(
       color: color,
+      border: border,
       borderRadius: BorderRadius.circular(radius),
       boxShadow: [
         BoxShadow(

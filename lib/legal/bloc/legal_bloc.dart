@@ -21,13 +21,20 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
     on<CaseSelected>(_onCaseSelected);
     on<CategorySelected>(_onCategorySelected);
     on<DateSelected>(_onDateSelected);
+    on<LongPressedIdChanged>(_onLongPressedIdChanged);
     on<CaseCreated>(_onCaseCreated);
     on<CaseUpdated>(_onCaseUpdated);
+    on<CaseDeleted>(_onCaseDeleted);
     on<CaseScheduled>(_onCaseScheduled);
     on<CategoryAdded>(_onCategoryAdded);
+    on<CategoryRenamed>(_onCategoryRenamed);
+    on<CategoryDeleted>(_onCategoryDeleted);
     on<FileUploaded>(_onFileUploaded);
     on<DocumentScanned>(_onDocumentScanned);
     on<OcrTextSaved>(_onOcrTextSaved);
+    on<FileRenamed>(_onFileRenamed);
+    on<FileDeleted>(_onFileDeleted);
+    on<FileMoved>(_onFileMoved);
     
     // Initial load
     add(LoadCases());
@@ -56,19 +63,31 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
       selectedCaseId: null,
       selectedCategoryId: null,
       selectedDate: null,
+      longPressedId: null,
     ));
   }
 
   void _onCaseSelected(CaseSelected event, Emitter<LegalState> emit) {
-    emit(state.copyWith(selectedCaseId: event.caseId, selectedCategoryId: null));
+    emit(state.copyWith(
+      selectedCaseId: event.caseId, 
+      selectedCategoryId: null,
+      longPressedId: null,
+    ));
   }
 
   void _onCategorySelected(CategorySelected event, Emitter<LegalState> emit) {
-    emit(state.copyWith(selectedCategoryId: event.categoryId));
+    emit(state.copyWith(
+      selectedCategoryId: event.categoryId,
+      longPressedId: null,
+    ));
   }
 
   void _onDateSelected(DateSelected event, Emitter<LegalState> emit) {
     emit(state.copyWith(selectedDate: event.date));
+  }
+
+  void _onLongPressedIdChanged(LongPressedIdChanged event, Emitter<LegalState> emit) {
+    emit(state.copyWith(longPressedId: event.id));
   }
 
   Future<void> _onCaseCreated(CaseCreated event, Emitter<LegalState> emit) async {
@@ -108,6 +127,19 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
     }
   }
 
+  Future<void> _onCaseDeleted(CaseDeleted event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.deleteCase(event.caseId);
+      emit(state.copyWith(
+        cases: cases,
+        selectedCaseId: state.selectedCaseId == event.caseId ? null : state.selectedCaseId,
+        upcomingHearings: _computeUpcoming(cases),
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not delete the case. Please try again.'));
+    }
+  }
+
   Future<void> _onCaseScheduled(CaseScheduled event, Emitter<LegalState> emit) async {
     try {
       final cases = await _repository.scheduleHearing(event.caseId, event.hearing);
@@ -126,6 +158,27 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
       emit(state.copyWith(cases: cases));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Could not add the folder. Please try again.'));
+    }
+  }
+
+  Future<void> _onCategoryRenamed(CategoryRenamed event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.renameCategory(event.caseId, event.categoryId, event.newName);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not rename the folder. Please try again.'));
+    }
+  }
+
+  Future<void> _onCategoryDeleted(CategoryDeleted event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.deleteCategory(event.caseId, event.categoryId);
+      emit(state.copyWith(
+        cases: cases,
+        selectedCategoryId: state.selectedCategoryId == event.categoryId ? null : state.selectedCategoryId,
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not delete the folder. Please try again.'));
     }
   }
 
@@ -163,6 +216,33 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
     } catch (e) {
       emit(state.copyWith(
           errorMessage: 'Could not save OCR text. Please try again.'));
+    }
+  }
+
+  Future<void> _onFileRenamed(FileRenamed event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.renameFile(event.caseId, event.fileId, event.newName);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not rename the file. Please try again.'));
+    }
+  }
+
+  Future<void> _onFileDeleted(FileDeleted event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.deleteFile(event.caseId, event.fileId);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not delete the file. Please try again.'));
+    }
+  }
+
+  Future<void> _onFileMoved(FileMoved event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.moveFile(event.caseId, event.fileId, event.targetCategoryName);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not move the file. Please try again.'));
     }
   }
 
