@@ -39,9 +39,48 @@ class CaseCreated extends LegalEvent {
   final String number;
   final String court;
   final String type;
-  const CaseCreated({required this.name, required this.number, required this.court, required this.type});
+
+  /// Folders to create inside the new case, in display order. Comes from the
+  /// create sheet's editable starter list (the type template, minus removals,
+  /// plus any the user added).
+  final List<String> folders;
+
+  const CaseCreated({
+    required this.name,
+    required this.number,
+    required this.court,
+    required this.type,
+    this.folders = const [],
+  });
   @override
-  List<Object?> get props => [name, number, court, type];
+  List<Object?> get props => [name, number, court, type, folders];
+}
+
+class CaseUpdated extends LegalEvent {
+  final int caseId;
+  final String name;
+  final String number;
+  final String court;
+  final String type;
+  final String hearing;
+  const CaseUpdated({
+    required this.caseId,
+    required this.name,
+    required this.number,
+    required this.court,
+    required this.type,
+    required this.hearing,
+  });
+  @override
+  List<Object?> get props => [caseId, name, number, court, type, hearing];
+}
+
+class CaseScheduled extends LegalEvent {
+  final int caseId;
+  final String hearing; // e.g. 'Jun 25'
+  const CaseScheduled(this.caseId, this.hearing);
+  @override
+  List<Object?> get props => [caseId, hearing];
 }
 
 class CategoryAdded extends LegalEvent {

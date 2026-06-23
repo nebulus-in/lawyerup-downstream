@@ -1,5 +1,7 @@
 part of 'legal_bloc.dart';
 
+const Object _undefined = Object();
+
 class LegalState extends Equatable {
   final String activeTab;
   final int? selectedCaseId;
@@ -26,16 +28,22 @@ class LegalState extends Equatable {
 
   LegalState copyWith({
     String? activeTab,
-    int? selectedCaseId,
-    int? selectedCategoryId,
-    String? selectedDate,
+    Object? selectedCaseId = _undefined,
+    Object? selectedCategoryId = _undefined,
+    Object? selectedDate = _undefined,
     List<Case>? cases,
   }) {
     return LegalState(
       activeTab: activeTab ?? this.activeTab,
-      selectedCaseId: selectedCaseId ?? this.selectedCaseId,
-      selectedCategoryId: selectedCategoryId ?? this.selectedCategoryId,
-      selectedDate: selectedDate ?? this.selectedDate,
+      selectedCaseId: identical(selectedCaseId, _undefined)
+          ? this.selectedCaseId
+          : selectedCaseId as int?,
+      selectedCategoryId: identical(selectedCategoryId, _undefined)
+          ? this.selectedCategoryId
+          : selectedCategoryId as int?,
+      selectedDate: identical(selectedDate, _undefined)
+          ? this.selectedDate
+          : selectedDate as String?,
       cases: cases ?? this.cases,
     );
   }

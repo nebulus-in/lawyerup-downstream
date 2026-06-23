@@ -129,7 +129,12 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
           ],
         )) {
     on<TabChanged>((event, emit) {
-      emit(state.copyWith(activeTab: event.tab, selectedCaseId: null, selectedCategoryId: null));
+      emit(state.copyWith(
+        activeTab: event.tab,
+        selectedCaseId: null,
+        selectedCategoryId: null,
+        selectedDate: null,
+      ));
     });
 
     on<CaseSelected>((event, emit) {
@@ -154,6 +159,27 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
       };
       final colors = palette[event.type] ?? [const Color(0xFF718096), const Color(0xFFF0F2F5)];
 
+      // Folder accents cycle through the same order the create sheet previews
+      // and CategoryAdded uses, so a folder keeps the colour it was shown with.
+      const folderPalette = [
+        [Color(0xFF1463E0), Color(0xFFE8F0FE)],
+        [Color(0xFF1A8A4A), Color(0xFFE8F5EE)],
+        [Color(0xFF9B59B6), Color(0xFFF5EEFF)],
+        [Color(0xFFE07A14), Color(0xFFFFF4EC)],
+        [Color(0xFFC0392B), Color(0xFFFCE8E8)],
+      ];
+
+      final categories = <Category>[
+        for (var i = 0; i < event.folders.length; i++)
+          Category(
+            id: now + 1 + i,
+            name: event.folders[i],
+            docs: 0,
+            color: folderPalette[i % folderPalette.length][0],
+            bg: folderPalette[i % folderPalette.length][1],
+          ),
+      ];
+
       final newCase = Case(
         id: now,
         name: event.name,
@@ -163,14 +189,45 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
         typeColor: colors[0],
         typeBg: colors[1],
         docs: 0,
-        hearing: '—',
-        categories: [
-          Category(id: now + 1, name: 'Pleadings', docs: 0, color: const Color(0xFF1463E0), bg: const Color(0xFFE8F0FE)),
-          Category(id: now + 2, name: 'Evidence', docs: 0, color: const Color(0xFF1A8A4A), bg: const Color(0xFFE8F5EE)),
-          Category(id: now + 3, name: 'Correspondence', docs: 0, color: const Color(0xFF9B59B6), bg: const Color(0xFFF5EEFF)),
-        ],
+        hearing: '-',
+        categories: categories,
       );
       emit(state.copyWith(cases: [...state.cases, newCase]));
+    });
+
+    on<CaseUpdated>((event, emit) {
+      final palette = {
+        'CIVIL': [const Color(0xFF1463E0), const Color(0xFFE8F0FE)],
+        'CRIMINAL': [const Color(0xFFE07A14), const Color(0xFFFFF4EC)],
+        'FAMILY': [const Color(0xFF9B59B6), const Color(0xFFF5EEFF)],
+        'CORPORATE': [const Color(0xFF1A8A4A), const Color(0xFFE8F5EE)],
+      };
+      final colors = palette[event.type] ??
+          [const Color(0xFF718096), const Color(0xFFF0F2F5)];
+
+      final updatedCases = state.cases.map((c) {
+        if (c.id == event.caseId) {
+          return c.copyWith(
+            name: event.name.isEmpty ? c.name : event.name,
+            number: event.number.isEmpty ? 'Pending' : event.number,
+            court: event.court.isEmpty ? 'TBD' : event.court,
+            type: event.type,
+            typeColor: colors[0],
+            typeBg: colors[1],
+            hearing: event.hearing,
+          );
+        }
+        return c;
+      }).toList();
+      emit(state.copyWith(cases: updatedCases));
+    });
+
+    on<CaseScheduled>((event, emit) {
+      final updatedCases = state.cases
+          .map((c) =>
+              c.id == event.caseId ? c.copyWith(hearing: event.hearing) : c)
+          .toList();
+      emit(state.copyWith(cases: updatedCases));
     });
 
     on<CategoryAdded>((event, emit) {

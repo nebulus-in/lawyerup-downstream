@@ -93,20 +93,27 @@ class Case extends Equatable {
       ];
 
   Case copyWith({
+    String? name,
+    String? number,
+    String? court,
+    String? type,
+    Color? typeColor,
+    Color? typeBg,
+    String? hearing,
     List<Category>? categories,
     List<CaseFile>? uncategorizedFiles,
     int? docs,
   }) {
     return Case(
       id: id,
-      name: name,
-      number: number,
-      court: court,
-      type: type,
-      typeColor: typeColor,
-      typeBg: typeBg,
+      name: name ?? this.name,
+      number: number ?? this.number,
+      court: court ?? this.court,
+      type: type ?? this.type,
+      typeColor: typeColor ?? this.typeColor,
+      typeBg: typeBg ?? this.typeBg,
       docs: docs ?? this.docs,
-      hearing: hearing,
+      hearing: hearing ?? this.hearing,
       uncategorizedFiles: uncategorizedFiles ?? this.uncategorizedFiles,
       categories: categories ?? this.categories,
     );
