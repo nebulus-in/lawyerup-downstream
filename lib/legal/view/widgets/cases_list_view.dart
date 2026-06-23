@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import 'legal_modals.dart';
 
@@ -11,7 +11,7 @@ class CasesListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cases = context.select((LegalBloc bloc) => bloc.state.cases);
+    final cases = context.select((CaseBloc bloc) => bloc.state.cases);
 
     return ListView(
       key: const ValueKey('cases_list'),
@@ -32,7 +32,7 @@ class CasesListView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                        color: LegalTheme.blue.withOpacity(0.2),
+                        color: LegalTheme.blue.withValues(alpha: 0.2),
                         blurRadius: 10,
                         offset: const Offset(0, 4))
                   ],
@@ -65,17 +65,17 @@ class _CaseItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLongPressed = context.select((LegalBloc bloc) => bloc.state.longPressedId == c.id);
+    final isLongPressed = context.select((NavigationBloc bloc) => bloc.state.longPressedId == c.id);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => context.read<LegalBloc>().add(CaseSelected(c.id)),
+      onTap: () => context.read<NavigationBloc>().add(CaseSelected(c.id)),
       onLongPress: () async {
         HapticFeedback.mediumImpact();
-        final bloc = context.read<LegalBloc>();
-        bloc.add(LongPressedIdChanged(c.id));
+        final navBloc = context.read<NavigationBloc>();
+        navBloc.add(LongPressedIdChanged(c.id));
         await LegalModals.showCaseOptions(context, c);
-        bloc.add(const LongPressedIdChanged(null));
+        navBloc.add(const LongPressedIdChanged(null));
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

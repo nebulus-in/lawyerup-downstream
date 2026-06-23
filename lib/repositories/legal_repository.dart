@@ -1,9 +1,21 @@
+import 'dart:async';
+
 import '../models/legal_models.dart';
 import '../services/document_scanner_service.dart';
 
 class LegalRepository {
+  /// Broadcasts the current case list after every mutation, making this
+  /// repository the single source of truth. BLoCs subscribe via [casesStream]
+  /// so they never hold divergent copies of the data.
+  final StreamController<List<Case>> _controller =
+      StreamController<List<Case>>.broadcast();
+
+  /// Emits the full case list whenever it changes. Late subscribers should seed
+  /// their initial state from [getCases]; the stream replays nothing.
+  Stream<List<Case>> get casesStream => _controller.stream;
+
   List<Case> _cases = [
-    Case(
+    const Case(
       id: 1,
       name: 'Smith v. Johnson',
       number: '2024-CV-0847',
@@ -12,11 +24,11 @@ class LegalRepository {
 
       docs: 24,
       hearing: 'Jun 28',
-      uncategorizedFiles: const [
+      uncategorizedFiles: [
         CaseFile(id: 1001, name: 'Initial_Consultation_Notes.docx', size: '1.2 MB', date: 'Jun 10'),
         CaseFile(id: 1002, name: 'Client_Retainer_Agreement.pdf', size: '450 KB', date: 'Jun 11'),
       ],
-      categories: const [
+      categories: [
         Category(
           id: 101,
           name: 'Pleadings',
@@ -57,7 +69,7 @@ class LegalRepository {
         ),
       ],
     ),
-    Case(
+    const Case(
       id: 2,
       name: 'Mehta v. State Bank',
       number: '2024-CR-0312',
@@ -66,10 +78,10 @@ class LegalRepository {
 
       docs: 17,
       hearing: 'Jun 25',
-      uncategorizedFiles: const [
+      uncategorizedFiles: [
         CaseFile(id: 2001, name: 'Fee_Receipt.pdf', size: '120 KB', date: 'May 20'),
       ],
-      categories: const [
+      categories: [
         Category(
           id: 201,
           name: 'FIR',
@@ -148,6 +160,7 @@ class LegalRepository {
     );
 
     _cases = [..._cases, newCase];
+    _broadcast();
     return List.unmodifiable(_cases);
   }
 
@@ -173,6 +186,7 @@ class LegalRepository {
 
   Future<List<Case>> deleteCase(int caseId) async {
     _cases = _cases.where((c) => c.id != caseId).toList();
+    _broadcast();
     return List.unmodifiable(_cases);
   }
 
@@ -273,10 +287,15 @@ class LegalRepository {
   }
 
   Future<List<Case>> deleteFile(int caseId, int fileId) async {
+    return deleteFiles(caseId, [fileId]);
+  }
+
+  Future<List<Case>> deleteFiles(int caseId, List<int> fileIds) async {
     return _apply(caseId, (c) {
-      final uncategorized = c.uncategorizedFiles.where((f) => f.id != fileId).toList();
+      final idsToDelete = fileIds.toSet();
+      final uncategorized = c.uncategorizedFiles.where((f) => !idsToDelete.contains(f.id)).toList();
       final categories = c.categories.map((cat) {
-        final files = cat.files.where((f) => f.id != fileId).toList();
+        final files = cat.files.where((f) => !idsToDelete.contains(f.id)).toList();
         return cat.copyWith(files: files, docs: files.length);
       }).toList();
       
@@ -294,13 +313,18 @@ class LegalRepository {
   }
 
   Future<List<Case>> moveFile(int caseId, int fileId, String? targetCategoryName) async {
+    return moveFiles(caseId, [fileId], targetCategoryName);
+  }
+
+  Future<List<Case>> moveFiles(int caseId, List<int> fileIds, String? targetCategoryName) async {
     return _apply(caseId, (c) {
-      CaseFile? targetFile;
+      final idsToMove = fileIds.toSet();
+      final filesToMove = <CaseFile>[];
       
-      // Find and remove the file from its current location
+      // Find and remove the files from their current location
       final uncategorizedOld = c.uncategorizedFiles.where((f) {
-        if (f.id == fileId) {
-          targetFile = f;
+        if (idsToMove.contains(f.id)) {
+          filesToMove.add(f);
           return false;
         }
         return true;
@@ -308,8 +332,8 @@ class LegalRepository {
       
       final categoriesOld = c.categories.map((cat) {
         final files = cat.files.where((f) {
-          if (f.id == fileId) {
-            targetFile = f;
+          if (idsToMove.contains(f.id)) {
+            filesToMove.add(f);
             return false;
           }
           return true;
@@ -317,18 +341,18 @@ class LegalRepository {
         return cat.copyWith(files: files, docs: files.length);
       }).toList();
       
-      if (targetFile == null) return c;
+      if (filesToMove.isEmpty) return c;
       
-      // Add it to the new location
+      // Add them to the new location
       if (targetCategoryName == null || targetCategoryName == 'Uncategorized') {
         return c.copyWith(
-          uncategorizedFiles: [...uncategorizedOld, targetFile!],
+          uncategorizedFiles: [...uncategorizedOld, ...filesToMove],
           categories: categoriesOld,
         );
       } else {
         final categoriesNew = categoriesOld.map((cat) {
           if (cat.name == targetCategoryName) {
-            final files = [...cat.files, targetFile!];
+            final files = [...cat.files, ...filesToMove];
             return cat.copyWith(files: files, docs: files.length);
           }
           return cat;
@@ -341,11 +365,17 @@ class LegalRepository {
     });
   }
 
-  /// Replaces the case matching [caseId] with [transform] applied to it and
-  /// returns the updated, unmodifiable case list.
+  /// Replaces the case matching [caseId] with [transform] applied to it,
+  /// broadcasts the change, and returns the updated, unmodifiable case list.
   List<Case> _apply(int caseId, Case Function(Case) transform) {
     _cases =
         _cases.map((c) => c.id == caseId ? transform(c) : c).toList();
+    _broadcast();
     return List.unmodifiable(_cases);
   }
+
+  void _broadcast() => _controller.add(List.unmodifiable(_cases));
+
+  /// Closes the underlying stream. Call when the repository is torn down.
+  void dispose() => _controller.close();
 }

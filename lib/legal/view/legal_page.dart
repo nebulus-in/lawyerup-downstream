@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../bloc/legal_bloc.dart';
+import '../bloc/blocs.dart';
 import '../../models/legal_models.dart';
-import '../../repositories/legal_repository.dart';
 import 'legal_theme.dart';
 import 'widgets/home_view.dart';
 import 'widgets/cases_list_view.dart';
@@ -10,6 +9,7 @@ import 'widgets/case_detail_view.dart';
 import 'widgets/category_detail_view.dart';
 import 'widgets/calendar_view.dart';
 import 'widgets/profile_view.dart';
+import 'widgets/research_view.dart';
 import 'widgets/legal_drawer.dart';
 import 'widgets/legal_modals.dart';
 
@@ -18,12 +18,8 @@ class LegalPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => LegalBloc(
-        repository: context.read<LegalRepository>(),
-      ),
-      child: const LegalView(),
-    );
+    // BLoCs are now provided at the app level in main.dart
+    return const LegalView();
   }
 }
 
@@ -32,18 +28,34 @@ class LegalView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeTab = context.select((LegalBloc bloc) => bloc.state.activeTab);
-    final selectedCaseId = context.select((LegalBloc bloc) => bloc.state.selectedCaseId);
-    final selectedDate = context.select((LegalBloc bloc) => bloc.state.selectedDate);
+    final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
+    final selectedCaseId = context.select((NavigationBloc bloc) => bloc.state.selectedCaseId);
+    final selectedDate = context.select((NavigationBloc bloc) => bloc.state.selectedDate);
 
     final inSubScreen = activeTab == 'cases' && selectedCaseId != null;
     final showPills = !inSubScreen && activeTab != 'profile';
 
-    return BlocListener<LegalBloc, LegalState>(
-      listenWhen: (prev, curr) =>
-          curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
-      listener: (context, state) =>
-          LegalModals.snack(context, state.errorMessage!),
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<CaseBloc, CaseState>(
+          listenWhen: (prev, curr) =>
+              curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
+          listener: (context, state) =>
+              LegalModals.snack(context, state.errorMessage!),
+        ),
+        BlocListener<CategoryBloc, CategoryState>(
+          listenWhen: (prev, curr) =>
+              curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
+          listener: (context, state) =>
+              LegalModals.snack(context, state.errorMessage!),
+        ),
+        BlocListener<FileBloc, FileState>(
+          listenWhen: (prev, curr) =>
+              curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
+          listener: (context, state) =>
+              LegalModals.snack(context, state.errorMessage!),
+        ),
+      ],
       child: Scaffold(
         backgroundColor: LegalTheme.page,
         drawer: const LegalDrawer(),
@@ -80,43 +92,37 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
+    final isProfile = activeTab == 'profile';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 14, 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Builder(
-            builder: (innerContext) => GestureDetector(
+          if (isProfile)
+            GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => Scaffold.of(innerContext).openDrawer(),
-              child: _HeaderIcon(icon: Icons.menu_rounded),
+              onTap: () {
+                final nav = context.read<NavigationBloc>();
+                final back = nav.state.previousTab;
+                nav.add(TabChanged(back == 'profile' ? 'documents' : back));
+              },
+              child: const _HeaderIcon(icon: Icons.arrow_back_rounded),
+            )
+          else
+            Builder(
+              builder: (innerContext) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Scaffold.of(innerContext).openDrawer(),
+                child: const _HeaderIcon(icon: Icons.menu_rounded),
+              ),
             ),
-          ),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () {
-              final state = context.read<LegalBloc>().state;
-              LegalModals.showNotifications(context, state);
-            },
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                _HeaderIcon(icon: Icons.notifications_none_rounded),
-                Positioned(
-                  right: 11,
-                  top: 11,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE03A1E),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.5),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            onTap: () =>
+                context.read<NavigationBloc>().add(const TabChanged('profile')),
+            child: const _HeaderIcon(icon: Icons.settings_outlined),
           ),
         ],
       ),
@@ -144,7 +150,7 @@ class _Tabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeTab = context.select((LegalBloc bloc) => bloc.state.activeTab);
+    final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -157,6 +163,7 @@ class _Tabs extends StatelessWidget {
         children: [
           _TabItem(label: 'Documents', value: 'documents', isActive: activeTab == 'documents'),
           _TabItem(label: 'Cases', value: 'cases', isActive: activeTab == 'cases'),
+          _TabItem(label: 'Research', value: 'research', isActive: activeTab == 'research'),
           _TabItem(label: 'Calendar', value: 'calendar', isActive: activeTab == 'calendar'),
         ],
       ),
@@ -176,7 +183,7 @@ class _TabItem extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => context.read<LegalBloc>().add(TabChanged(value)),
+        onTap: () => context.read<NavigationBloc>().add(TabChanged(value)),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -186,7 +193,7 @@ class _TabItem extends StatelessWidget {
             boxShadow: isActive
                 ? [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, 2))
                   ]
@@ -213,9 +220,9 @@ class _MainContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeTab = context.select((LegalBloc bloc) => bloc.state.activeTab);
-    final selectedCaseId = context.select((LegalBloc bloc) => bloc.state.selectedCaseId);
-    final selectedCategoryId = context.select((LegalBloc bloc) => bloc.state.selectedCategoryId);
+    final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
+    final selectedCaseId = context.select((NavigationBloc bloc) => bloc.state.selectedCaseId);
+    final selectedCategoryId = context.select((NavigationBloc bloc) => bloc.state.selectedCategoryId);
 
     if (activeTab == 'documents') return const HomeView();
     if (activeTab == 'cases') {
@@ -224,6 +231,7 @@ class _MainContent extends StatelessWidget {
       return const CategoryDetailView();
     }
     if (activeTab == 'calendar') return const CalendarView();
+    if (activeTab == 'research') return const ResearchView();
     return const ProfileView();
   }
 }
@@ -233,7 +241,7 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeTab = context.select((LegalBloc bloc) => bloc.state.activeTab);
+    final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
 
     return Container(
       decoration: BoxDecoration(
@@ -241,7 +249,7 @@ class _BottomNav extends StatelessWidget {
         border: const Border(top: BorderSide(color: LegalTheme.page)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 16,
               offset: const Offset(0, -4))
         ],
@@ -255,8 +263,8 @@ class _BottomNav extends StatelessWidget {
             children: [
               _NavItem(icon: Icons.home_rounded, label: 'Home', value: 'documents', isActive: activeTab == 'documents'),
               _NavItem(icon: Icons.folder_rounded, label: 'Cases', value: 'cases', isActive: activeTab == 'cases'),
+              _NavItem(icon: Icons.menu_book_rounded, label: 'Research', value: 'research', isActive: activeTab == 'research'),
               _NavItem(icon: Icons.event_rounded, label: 'Calendar', value: 'calendar', isActive: activeTab == 'calendar'),
-              _NavItem(icon: Icons.person_rounded, label: 'Profile', value: 'profile', isActive: activeTab == 'profile'),
             ],
           ),
         ),
@@ -278,7 +286,7 @@ class _NavItem extends StatelessWidget {
     final color = isActive ? LegalTheme.blue : const Color(0xFFAAB2BF);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => context.read<LegalBloc>().add(TabChanged(value)),
+      onTap: () => context.read<NavigationBloc>().add(TabChanged(value)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
         child: Column(
@@ -303,15 +311,15 @@ class _DateModalOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = context.select((LegalBloc bloc) => bloc.state.selectedDate)!;
-    final allCases = context.select((LegalBloc bloc) => bloc.state.cases);
+    final date = context.select((NavigationBloc bloc) => bloc.state.selectedDate)!;
+    final allCases = context.select((CaseBloc bloc) => bloc.state.cases);
     final cases =
         allCases.where((c) => c.hearingDate == date).toList();
     final weekday = LegalTheme.weekdayName(date.weekday);
 
     return Positioned.fill(
       child: GestureDetector(
-        onTap: () => context.read<LegalBloc>().add(const DateSelected(null)),
+        onTap: () => context.read<NavigationBloc>().add(const DateSelected(null)),
         child: Container(
           color: Colors.black45,
           alignment: Alignment.bottomCenter,
@@ -380,7 +388,7 @@ class _ModalHeader extends StatelessWidget {
         ),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => context.read<LegalBloc>().add(const DateSelected(null)),
+          onTap: () => context.read<NavigationBloc>().add(const DateSelected(null)),
           child: Container(
             width: 30,
             height: 30,
@@ -437,10 +445,10 @@ class _ModalCaseItem extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        final bloc = context.read<LegalBloc>();
-        bloc.add(const DateSelected(null));
-        bloc.add(const TabChanged('cases'));
-        bloc.add(CaseSelected(c.id));
+        final navBloc = context.read<NavigationBloc>();
+        navBloc.add(const DateSelected(null));
+        navBloc.add(const TabChanged('cases'));
+        navBloc.add(CaseSelected(c.id));
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -493,18 +501,18 @@ class _AddCaseToDayButton extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        final state = context.read<LegalBloc>().state;
+        final caseState = context.read<CaseBloc>().state;
         final label = Case.formatHearing(date);
         LegalModals.showCasePicker(
           context,
-          state,
+          caseState,
           title: 'Add to June ${date.day}',
           subtitle: 'Pick a case to set its next hearing for this day',
           where: (c) => c.hearing != label,
           trailingHint: (c) => c.isScheduled ? 'Now ${c.hearing}' : null,
           emptyText: 'Every case is already on this day.',
           onPick: (c) {
-            context.read<LegalBloc>().add(CaseScheduled(c.id, label));
+            context.read<CaseBloc>().add(CaseScheduled(c.id, label));
           },
         );
       },
@@ -516,7 +524,7 @@ class _AddCaseToDayButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-                color: LegalTheme.blue.withOpacity(0.28),
+                color: LegalTheme.blue.withValues(alpha: 0.28),
                 blurRadius: 18,
                 offset: const Offset(0, 8))
           ],

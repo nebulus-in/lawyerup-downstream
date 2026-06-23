@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 import 'shared_widgets.dart';
 import 'legal_modals.dart';
 
@@ -10,14 +10,15 @@ class CategoryDetailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cases = context.select((LegalBloc bloc) => bloc.state.cases);
-    final selectedCaseId = context.select((LegalBloc bloc) => bloc.state.selectedCaseId);
-    final selectedCategoryId = context.select((LegalBloc bloc) => bloc.state.selectedCategoryId);
+    final selectedCaseId = context.select((NavigationBloc bloc) => bloc.state.selectedCaseId);
+    final selectedCategoryId = context.select((NavigationBloc bloc) => bloc.state.selectedCategoryId);
+    final cases = context.select((CaseBloc bloc) => bloc.state.cases);
+    final isMultiSelect = context.select((FileBloc bloc) => bloc.state.isMultiSelectMode);
+    final selectedFileIds = context.select((FileBloc bloc) => bloc.state.selectedFileIds);
 
     final selectedCase = cases.firstWhere((c) => c.id == selectedCaseId);
     final cat = selectedCase.categories.firstWhere((c) => c.id == selectedCategoryId);
 
-    // Using cat.id as index for color stability in this preview
     final color = LegalTheme.getCategoryColor(cat.id);
     final bg = LegalTheme.getCategoryBg(cat.id);
 
@@ -26,18 +27,34 @@ class CategoryDetailView extends StatelessWidget {
       children: [
         Column(
           children: [
-            DetailHeader(
-              onBack: () => context.read<LegalBloc>().add(const CategorySelected(null)),
-              leading: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                    color: bg, borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.folder, color: color, size: 16),
+            if (isMultiSelect)
+              SelectionHeader(
+                caseId: selectedCase.id,
+                selectedIds: selectedFileIds.toList(),
+                onClear: () => context.read<FileBloc>().add(SelectionCleared()),
+              )
+            else
+              DetailHeader(
+                onBack: () => context.read<NavigationBloc>().add(const CategorySelected(null)),
+                leading: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                      color: bg, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.folder, color: color, size: 16),
+                ),
+                title: cat.name,
+                subtitle: '${cat.docs} Documents',
+                trailing: cat.files.isNotEmpty
+                  ? TextButton(
+                      onPressed: () {
+                        context.read<FileBloc>().add(SelectionToggled(cat.files.first.id));
+                      },
+                      child: const Text('Select', 
+                        style: TextStyle(color: LegalTheme.blue, fontWeight: FontWeight.w700)),
+                    )
+                  : null,
               ),
-              title: cat.name,
-              subtitle: '${cat.docs} Documents',
-            ),
             Expanded(
               child: cat.files.isEmpty
                   ? Center(
@@ -75,21 +92,22 @@ class CategoryDetailView extends StatelessWidget {
             ),
           ],
         ),
-        Positioned(
-          bottom: 20,
-          right: 20,
-          child: FloatingActionButton(
-            onPressed: () => LegalModals.showAddDocumentSheet(
-              context,
-              caseId: selectedCase.id,
-              categoryName: cat.name,
-              destinationLabel: cat.name,
+        if (!isMultiSelect)
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: () => LegalModals.showAddDocumentSheet(
+                context,
+                caseId: selectedCase.id,
+                categoryName: cat.name,
+                destinationLabel: cat.name,
+              ),
+              backgroundColor: LegalTheme.blue,
+              tooltip: 'Add document',
+              child: const Icon(Icons.add, color: Colors.white),
             ),
-            backgroundColor: LegalTheme.blue,
-            tooltip: 'Add document',
-            child: const Icon(Icons.add, color: Colors.white),
-          ),
-        )
+          )
       ],
     );
   }

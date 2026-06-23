@@ -3,91 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import '../../../services/document_scanner_service.dart';
 import '../../../services/ocr_service.dart';
 
 class LegalModals {
-  static void showNotifications(BuildContext context, LegalState state) {
-    final hearings = state.cases.where((c) => c.isScheduled).toList();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        decoration: LegalTheme.sheetDecoration,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            grabber(),
-            const SizedBox(height: 14),
-            const Text('Notifications',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            const Text('Hearing reminders from your active cases',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    color: LegalTheme.muted,
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
-            if (hearings.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text("You're all caught up.",
-                    style: TextStyle(fontSize: 13.5, color: LegalTheme.muted)),
-              )
-            else
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: hearings.map((c) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                              color: LegalTheme.getCaseBg(c.type),
-                              borderRadius: BorderRadius.circular(12)),
-                          child: Icon(Icons.gavel_rounded,
-                              color: LegalTheme.getCaseColor(c.type), size: 19),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Hearing · ${c.name}',
-                                  style: const TextStyle(
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: LegalTheme.ink)),
-                              const SizedBox(height: 2),
-                              Text('${c.hearing} · ${c.court}',
-                                  style: const TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w500,
-                                      color: LegalTheme.muted)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )).toList(),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   static void showCasePicker(
     BuildContext context,
-    LegalState state, {
+    CaseState state, {
     required String title,
     required String subtitle,
     required void Function(Case) onPick,
@@ -191,7 +115,7 @@ class LegalModals {
     );
   }
 
-  static void showSearch(BuildContext context, LegalState state) {
+  static void showSearch(BuildContext context, CaseState state) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -199,10 +123,10 @@ class LegalModals {
       builder: (modalContext) => _SearchSheet(
         cases: state.cases,
         onOpenCase: (caseId) {
-          final bloc = context.read<LegalBloc>();
+          final navBloc = context.read<NavigationBloc>();
           Navigator.pop(modalContext);
-          bloc.add(const TabChanged('cases'));
-          bloc.add(CaseSelected(caseId));
+          navBloc.add(const TabChanged('cases'));
+          navBloc.add(CaseSelected(caseId));
         },
       ),
     );
@@ -215,7 +139,7 @@ class LegalModals {
       backgroundColor: Colors.transparent,
       builder: (modalContext) => _NewCaseModalContent(
         onSave: (name, number, court, type, folders) {
-          context.read<LegalBloc>().add(CaseCreated(
+          context.read<CaseBloc>().add(CaseCreated(
                 name: name,
                 number: number,
                 court: court,
@@ -236,7 +160,7 @@ class LegalModals {
       builder: (modalContext) => _EditCaseModalContent(
         original: c,
         onSave: (name, number, court, type, hearing) {
-          context.read<LegalBloc>().add(CaseUpdated(
+          context.read<CaseBloc>().add(CaseUpdated(
                 caseId: c.id,
                 name: name,
                 number: number,
@@ -274,7 +198,7 @@ class LegalModals {
               ElevatedButton(
                 onPressed: () {
                   context
-                      .read<LegalBloc>()
+                      .read<CategoryBloc>()
                       .add(CategoryAdded(caseId, controller.text));
                   Navigator.pop(modalContext);
                 },
@@ -318,7 +242,7 @@ class LegalModals {
               ElevatedButton(
                 onPressed: () {
                   context
-                      .read<LegalBloc>()
+                      .read<CategoryBloc>()
                       .add(CategoryRenamed(caseId, cat.id, controller.text));
                   Navigator.pop(modalContext);
                 },
@@ -362,7 +286,7 @@ class LegalModals {
               ElevatedButton(
                 onPressed: () {
                   context
-                      .read<LegalBloc>()
+                      .read<FileBloc>()
                       .add(FileRenamed(caseId, file.id, controller.text));
                   Navigator.pop(modalContext);
                 },
@@ -437,7 +361,7 @@ class LegalModals {
               enabled: true,
               onTap: () {
                 Navigator.pop(modalContext);
-                context.read<LegalBloc>().add(FileUploaded(caseId, categoryName));
+                context.read<FileBloc>().add(FileUploaded(caseId, categoryName));
               },
             ),
           ],
@@ -482,7 +406,7 @@ class LegalModals {
               isDestructive: true,
               onTap: () {
                 Navigator.pop(modalContext);
-                context.read<LegalBloc>().add(CaseDeleted(c.id));
+                context.read<CaseBloc>().add(CaseDeleted(c.id));
                 snack(context, 'Case deleted');
               },
             ),
@@ -529,7 +453,7 @@ class LegalModals {
               isDestructive: true,
               onTap: () {
                 Navigator.pop(modalContext);
-                context.read<LegalBloc>().add(CategoryDeleted(caseId, cat.id));
+                context.read<CategoryBloc>().add(CategoryDeleted(caseId, cat.id));
                 snack(context, 'Folder deleted');
               },
             ),
@@ -539,65 +463,10 @@ class LegalModals {
     );
   }
 
-  static Future<void> showFileOptions(BuildContext context, int caseId, CaseFile file) async {
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        decoration: LegalTheme.sheetDecoration,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            grabber(),
-            const SizedBox(height: 14),
-            Text(file.name,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text('${file.size} · ${file.date}',
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    color: LegalTheme.muted,
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
-            _OptionRow(
-              icon: Icons.drive_file_rename_outline_rounded,
-              label: 'Rename document',
-              onTap: () {
-                Navigator.pop(modalContext);
-                showRenameFileModal(context, caseId, file);
-              },
-            ),
-            _OptionRow(
-              icon: Icons.move_to_inbox_rounded,
-              label: 'Move to folder',
-              onTap: () {
-                Navigator.pop(modalContext);
-                _showMoveFileSheet(context, caseId, file);
-              },
-            ),
-            _OptionRow(
-              icon: Icons.delete_outline_rounded,
-              label: 'Delete document',
-              isDestructive: true,
-              onTap: () {
-                Navigator.pop(modalContext);
-                context.read<LegalBloc>().add(FileDeleted(caseId, file.id));
-                snack(context, 'Document deleted');
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static void _showMoveFileSheet(BuildContext context, int caseId, CaseFile file) {
-    final state = context.read<LegalBloc>().state;
-    final c = state.cases.firstWhere((c) => c.id == caseId);
+  static void showMoveFilesSheet(BuildContext context, int caseId, List<int> fileIds) {
+    final cases = context.read<CaseBloc>().state.cases;
+    final c = cases.firstWhere((c) => c.id == caseId);
+    final count = fileIds.length;
     
     showModalBottomSheet(
       context: context,
@@ -611,8 +480,8 @@ class LegalModals {
           children: [
             grabber(),
             const SizedBox(height: 14),
-            const Text('Move document',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Move ${count == 1 ? 'document' : '$count documents'}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text('Select a destination folder in ${c.name}',
                 style: const TextStyle(
@@ -627,16 +496,16 @@ class LegalModals {
                   GestureDetector(
                     onTap: () {
                       Navigator.pop(modalContext);
-                      context.read<LegalBloc>().add(FileMoved(caseId, file.id, null));
-                      snack(context, 'Document moved to General');
+                      context.read<FileBloc>().add(FilesMoved(caseId, fileIds, null));
+                      snack(context, '${count == 1 ? 'Document' : '$count documents'} moved to General');
                     },
                     child: const _FolderPickerItem(name: 'General (Uncategorized)'),
                   ),
                   ...c.categories.map((cat) => GestureDetector(
                         onTap: () {
                           Navigator.pop(modalContext);
-                          context.read<LegalBloc>().add(FileMoved(caseId, file.id, cat.name));
-                          snack(context, 'Document moved to ${cat.name}');
+                          context.read<FileBloc>().add(FilesMoved(caseId, fileIds, cat.name));
+                          snack(context, '${count == 1 ? 'Document' : '$count documents'} moved to ${cat.name}');
                         },
                         child: _FolderPickerItem(name: cat.name),
                       )),
@@ -658,12 +527,12 @@ class LegalModals {
     required int caseId,
     String? categoryName,
   }) async {
-    final bloc = context.read<LegalBloc>();
+    final fileBloc = context.read<FileBloc>();
     final messenger = ScaffoldMessenger.of(context);
     try {
       final doc = await DocumentScannerService.instance.scan();
       if (doc == null) return; // Cancelled — nothing to say.
-      bloc.add(DocumentScanned(caseId, categoryName, doc));
+      fileBloc.add(DocumentScanned(caseId, categoryName, doc));
       _snack(
         messenger,
         doc.pageCount > 0
@@ -783,15 +652,15 @@ class LegalModals {
   }
 
   static void _pickCaseAndFolderForOcr(BuildContext context, String text) {
-    final state = context.read<LegalBloc>().state;
+    final caseState = context.read<CaseBloc>().state;
     showCasePicker(
       context,
-      state,
+      caseState,
       title: 'Save OCR result',
       subtitle: 'Select a case to save this extracted text',
       onPick: (c) {
         if (c.categories.isEmpty) {
-          context.read<LegalBloc>().add(OcrTextSaved(
+          context.read<FileBloc>().add(OcrTextSaved(
                 caseId: c.id,
                 text: text,
                 fileName: 'OCR_Result_${DateTime.now().millisecondsSinceEpoch}.txt',
@@ -833,7 +702,7 @@ class LegalModals {
                   GestureDetector(
                     onTap: () {
                       Navigator.pop(modalContext);
-                      context.read<LegalBloc>().add(OcrTextSaved(
+                      context.read<FileBloc>().add(OcrTextSaved(
                             caseId: c.id,
                             text: text,
                             fileName: 'OCR_Result_${DateTime.now().millisecondsSinceEpoch}.txt',
@@ -845,7 +714,7 @@ class LegalModals {
                   ...c.categories.map((cat) => GestureDetector(
                         onTap: () {
                           Navigator.pop(modalContext);
-                          context.read<LegalBloc>().add(OcrTextSaved(
+                          context.read<FileBloc>().add(OcrTextSaved(
                                 caseId: c.id,
                                 categoryName: cat.name,
                                 text: text,
@@ -1255,7 +1124,7 @@ class _NewCaseModalContentState extends State<_NewCaseModalContent> {
             children: [
               for (var i = 0; i < _folders.length; i++)
                 _folderChip(_folders[i], i),
-            ],
+          ],
           ),
         const SizedBox(height: 12),
         Row(
@@ -1326,7 +1195,7 @@ class _NewCaseModalContentState extends State<_NewCaseModalContent> {
             behavior: HitTestBehavior.opaque,
             onTap: () => _removeFolder(name),
             child: Icon(Icons.close_rounded,
-                size: 14, color: colors[0].withOpacity(0.7)),
+                size: 14, color: colors[0].withValues(alpha: 0.7)),
           ),
         ],
       ),
@@ -1533,13 +1402,9 @@ class _SearchSheetState extends State<_SearchSheet> {
   void initState() {
     super.initState();
     _all = [
-      for (final c in widget.cases) ...[
-        for (final f in c.uncategorizedFiles)
+      for (final c in widget.cases)
+        for (final f in c.allFiles)
           _DocHit(f.name, f.size, f.date, c.name, c.id),
-        for (final cat in c.categories)
-          for (final f in cat.files)
-            _DocHit(f.name, f.size, f.date, c.name, c.id),
-      ]
     ];
   }
 

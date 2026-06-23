@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 
 class ProfileView extends StatelessWidget {
   const ProfileView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final cases = context.select((LegalBloc bloc) => bloc.state.cases);
+    final cases = context.select((CaseBloc bloc) => bloc.state.cases);
     final activeCases = cases.length;
     final totalDocs = cases.fold<int>(0, (sum, c) => sum + c.docs);
     final hearings = cases.where((c) => c.isScheduled).length;

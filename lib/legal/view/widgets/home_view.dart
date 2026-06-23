@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import '../../../services/document_scanner_service.dart';
 import 'legal_modals.dart';
@@ -14,26 +14,26 @@ class HomeView extends StatelessWidget {
     return ListView(
       key: const ValueKey('home'),
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      children: [
-        const Padding(
+      children: const [
+        Padding(
           padding: EdgeInsets.only(top: 12, bottom: 8),
           child: Text('Upcoming Hearings',
               style: TextStyle(
                   fontSize: 15, fontWeight: FontWeight.w700, color: LegalTheme.ink)),
         ),
-        const _HearingsCard(),
-        const SizedBox(height: 16),
-        const _QuickActions(),
-        const SizedBox(height: 16),
-        const _SearchButton(),
-        const Padding(
+        _HearingsCard(),
+        SizedBox(height: 16),
+        _QuickActions(),
+        SizedBox(height: 16),
+        _SearchButton(),
+        Padding(
           padding: EdgeInsets.only(top: 14, bottom: 8),
           child: Text('Recent Documents',
               style: TextStyle(
                   fontSize: 15, fontWeight: FontWeight.w700, color: LegalTheme.ink)),
         ),
-        const _RecentDocs(),
-        const SizedBox(height: 20),
+        _RecentDocs(),
+        SizedBox(height: 20),
       ],
     );
   }
@@ -44,7 +44,7 @@ class _HearingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final upcoming = context.select((LegalBloc bloc) => bloc.state.upcomingHearings);
+    final upcoming = context.select((CaseBloc bloc) => bloc.state.upcomingHearings);
 
     if (upcoming.isEmpty) {
       return Container(
@@ -170,10 +170,10 @@ class _QuickActions extends StatelessWidget {
                   context, 'Scanning is available on Android and iOS.');
               return;
             }
-            final state = context.read<LegalBloc>().state;
+            final caseState = context.read<CaseBloc>().state;
             LegalModals.showCasePicker(
               context,
-              state,
+              caseState,
               title: 'Scan to case',
               subtitle: 'Choose where the scanned document is filed',
               emptyText: 'Create a case first to file your scan.',
@@ -197,7 +197,7 @@ class _QuickActions extends StatelessWidget {
         _ActionChip(
           icon: Icons.folder_open,
           label: 'Case Files',
-          onTap: () => context.read<LegalBloc>().add(const TabChanged('cases')),
+          onTap: () => context.read<NavigationBloc>().add(const TabChanged('cases')),
         ),
       ],
     );
@@ -257,8 +257,8 @@ class _SearchButton extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        final state = context.read<LegalBloc>().state;
-        LegalModals.showSearch(context, state);
+        final caseState = context.read<CaseBloc>().state;
+        LegalModals.showSearch(context, caseState);
       },
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -267,7 +267,7 @@ class _SearchButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-                color: LegalTheme.blue.withOpacity(0.32),
+                color: LegalTheme.blue.withValues(alpha: 0.32),
                 blurRadius: 24,
                 offset: const Offset(0, 10))
           ],

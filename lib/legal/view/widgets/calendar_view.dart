@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import 'legal_modals.dart';
 
@@ -10,7 +10,7 @@ class CalendarView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cases = context.select((LegalBloc bloc) => bloc.state.cases);
+    final cases = context.select((CaseBloc bloc) => bloc.state.cases);
 
     return ListView(
       key: const ValueKey('calendar'),
@@ -81,11 +81,11 @@ class _CalendarCard extends StatelessWidget {
         children: [
           _CalendarGrid(cases: cases),
           const SizedBox(height: 16),
-          Row(
+          const Row(
             children: [
               _LegendChip(fill: LegalTheme.blue, label: 'Hearing day'),
-              const SizedBox(width: 18),
-              const _LegendChip(fill: null, label: 'Today'),
+              SizedBox(width: 18),
+              _LegendChip(fill: null, label: 'Today'),
             ],
           ),
         ],
@@ -168,7 +168,7 @@ class _CalendarGrid extends StatelessWidget {
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () =>
-                  context.read<LegalBloc>().add(DateSelected(DateTime(2026, 6, day))),
+                  context.read<NavigationBloc>().add(DateSelected(DateTime(2026, 6, day))),
               child: Container(
                 decoration: BoxDecoration(
                   color: hasHearing

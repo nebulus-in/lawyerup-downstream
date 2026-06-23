@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
-import '../../bloc/legal_bloc.dart';
+import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import 'shared_widgets.dart';
 import 'legal_modals.dart';
@@ -12,9 +12,10 @@ class CaseDetailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Optimized rebuilds: only watch specific state parts
-    final selectedCaseId = context.select((LegalBloc bloc) => bloc.state.selectedCaseId);
-    final cases = context.select((LegalBloc bloc) => bloc.state.cases);
+    final selectedCaseId = context.select((NavigationBloc bloc) => bloc.state.selectedCaseId);
+    final cases = context.select((CaseBloc bloc) => bloc.state.cases);
+    final isMultiSelect = context.select((FileBloc bloc) => bloc.state.isMultiSelectMode);
+    final selectedFileIds = context.select((FileBloc bloc) => bloc.state.selectedFileIds);
     
     final selectedCase = cases.firstWhere((c) => c.id == selectedCaseId);
 
@@ -23,48 +24,74 @@ class CaseDetailView extends StatelessWidget {
       children: [
         Column(
           children: [
-            DetailHeader(
-              onBack: () => context.read<LegalBloc>().add(const CaseSelected(null)),
-              title: selectedCase.name,
-              subtitle: selectedCase.number,
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                    color: LegalTheme.getCaseBg(selectedCase.type),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Text(selectedCase.type,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: LegalTheme.getCaseColor(selectedCase.type))),
+            if (isMultiSelect)
+              SelectionHeader(
+                caseId: selectedCase.id,
+                selectedIds: selectedFileIds.toList(),
+                onClear: () => context.read<FileBloc>().add(SelectionCleared()),
+              )
+            else
+              DetailHeader(
+                onBack: () => context.read<NavigationBloc>().add(const CaseSelected(null)),
+                title: selectedCase.name,
+                subtitle: selectedCase.number,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (selectedCase.allFiles.isNotEmpty)
+                      TextButton(
+                        onPressed: () {
+                          // Enter selection mode by selecting the first available file
+                          context.read<FileBloc>().add(
+                              SelectionToggled(selectedCase.allFiles.first.id));
+                        },
+                        child: const Text('Select', 
+                          style: TextStyle(color: LegalTheme.blue, fontWeight: FontWeight.w700)),
+                      ),
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: LegalTheme.getCaseBg(selectedCase.type),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text(selectedCase.type,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: LegalTheme.getCaseColor(selectedCase.type))),
+                    ),
+                  ],
+                ),
               ),
-            ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  _CaseOverviewCard(c: selectedCase),
-                  const SizedBox(height: 22),
+                  if (!isMultiSelect) ...[
+                    _CaseOverviewCard(c: selectedCase),
+                    const SizedBox(height: 22),
+                  ],
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Categories (${selectedCase.categories.length})',
                           style: const TextStyle(
                               fontSize: 15, fontWeight: FontWeight.w700)),
-                      GestureDetector(
-                        onTap: () => LegalModals.showAddCategoryModal(context, selectedCase.id),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.add, color: LegalTheme.blue, size: 14),
-                            SizedBox(width: 4),
-                            Text('New Folder',
-                                style: TextStyle(
-                                    color: LegalTheme.blue,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700)),
-                          ],
+                      if (!isMultiSelect)
+                        GestureDetector(
+                          onTap: () => LegalModals.showAddCategoryModal(context, selectedCase.id),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.add, color: LegalTheme.blue, size: 14),
+                              SizedBox(width: 4),
+                              Text('New Folder',
+                                  style: TextStyle(
+                                      color: LegalTheme.blue,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700)),
+                            ],
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -86,23 +113,25 @@ class CaseDetailView extends StatelessWidget {
             ),
           ],
         ),
-        Positioned(
-          bottom: 20,
-          right: 20,
-          child: FloatingActionButton(
-            onPressed: () => LegalModals.showAddDocumentSheet(
-              context,
-              caseId: selectedCase.id,
-              destinationLabel: selectedCase.name,
+        if (!isMultiSelect)
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: () => LegalModals.showAddDocumentSheet(
+                context,
+                caseId: selectedCase.id,
+                destinationLabel: selectedCase.name,
+              ),
+              backgroundColor: LegalTheme.blue,
+              tooltip: 'Add document',
+              child: const Icon(Icons.add, color: Colors.white),
             ),
-            backgroundColor: LegalTheme.blue,
-            tooltip: 'Add document',
-            child: const Icon(Icons.add, color: Colors.white),
-          ),
-        )
+          )
       ],
     );
   }
+
 }
 
 class _CaseOverviewCard extends StatelessWidget {
@@ -164,13 +193,13 @@ class _CaseOverviewCard extends StatelessWidget {
           ),
           Divider(height: 1, color: Colors.grey[100]),
           _FactRow(label: 'COURT', value: c.court),
-          _FactDivider(),
+          const _FactDivider(),
           _FactRow(
             label: 'NEXT HEARING',
             value: scheduled ? c.hearing : 'Not scheduled',
             highlight: scheduled,
           ),
-          _FactDivider(),
+          const _FactDivider(),
           _FactRow(label: 'CASE NO.', value: c.number),
           const SizedBox(height: 6),
         ],
@@ -238,17 +267,23 @@ class _CategoryItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = LegalTheme.getCategoryColor(cat.id);
     final bg = LegalTheme.getCategoryBg(cat.id);
-    final isLongPressed = context.select((LegalBloc bloc) => bloc.state.longPressedId == cat.id);
+    final isLongPressed = context.select((NavigationBloc bloc) => bloc.state.longPressedId == cat.id);
+    final isMultiSelect = context.select((FileBloc bloc) => bloc.state.isMultiSelectMode);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => context.read<LegalBloc>().add(CategorySelected(cat.id)),
+      onTap: () {
+        if (!isMultiSelect) {
+          context.read<NavigationBloc>().add(CategorySelected(cat.id));
+        }
+      },
       onLongPress: () async {
+        if (isMultiSelect) return;
         HapticFeedback.mediumImpact();
-        final bloc = context.read<LegalBloc>();
-        bloc.add(LongPressedIdChanged(cat.id));
+        final navBloc = context.read<NavigationBloc>();
+        navBloc.add(LongPressedIdChanged(cat.id));
         await LegalModals.showCategoryOptions(context, caseId, cat);
-        bloc.add(const LongPressedIdChanged(null));
+        navBloc.add(const LongPressedIdChanged(null));
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

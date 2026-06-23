@@ -120,6 +120,38 @@ class Case extends Equatable {
 
   static String formatHearing(DateTime dt) => '${_monthAbbr[dt.month - 1]} ${dt.day}';
 
+  /// Cases with a hearing scheduled for today or later, ordered by date then
+  /// name, limited to those falling on the next [maxDays] distinct hearing days.
+  ///
+  /// Domain logic for "upcoming hearings" lives here rather than in a BLoC so
+  /// the orchestration layer stays thin.
+  static List<Case> upcomingHearings(List<Case> cases, {int maxDays = 2}) {
+    final today = DateTime.now();
+    final upcoming = <(Case, DateTime)>[];
+
+    for (final c in cases) {
+      final date = c.hearingDate;
+      if (date == null || date.isBefore(today)) continue;
+      upcoming.add((c, date));
+    }
+
+    upcoming.sort((a, b) {
+      final byDate = a.$2.compareTo(b.$2);
+      return byDate != 0 ? byDate : a.$1.name.compareTo(b.$1.name);
+    });
+
+    final days = <DateTime>{};
+    final result = <Case>[];
+    for (final entry in upcoming) {
+      if (!days.contains(entry.$2)) {
+        if (days.length == maxDays) break;
+        days.add(entry.$2);
+      }
+      result.add(entry.$1);
+    }
+    return result;
+  }
+
   @override
   List<Object?> get props => [
         id,
@@ -157,6 +189,22 @@ class Case extends Equatable {
       uncategorizedFiles: uncategorizedFiles ?? this.uncategorizedFiles,
       categories: categories ?? this.categories,
     );
+  }
+
+  /// Every file in this case, across the uncategorized bucket and all categories.
+  Iterable<CaseFile> get allFiles sync* {
+    yield* uncategorizedFiles;
+    for (final cat in categories) {
+      yield* cat.files;
+    }
+  }
+
+  /// The file with [id] anywhere in this case, or null if it isn't present.
+  CaseFile? fileById(int id) {
+    for (final f in allFiles) {
+      if (f.id == id) return f;
+    }
+    return null;
   }
 
   /// Returns a copy with [category] appended.

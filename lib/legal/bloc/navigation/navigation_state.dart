@@ -1,69 +1,52 @@
-part of 'legal_bloc.dart';
+part of 'navigation_bloc.dart';
 
 const Object _undefined = Object();
 
-enum LegalStatus { initial, loading, success, failure }
-
-class LegalState extends Equatable {
-  final LegalStatus status;
+/// State for navigation within the legal app UI.
+class NavigationState extends Equatable {
   final String activeTab;
+
+  /// The tab that was active before the current one, used to power the
+  /// back button on standalone screens like Profile.
+  final String previousTab;
   final int? selectedCaseId;
   final int? selectedCategoryId;
   final DateTime? selectedDate;
-  final List<Case> cases;
-  final List<Case> upcomingHearings;
-  
-  /// The ID of the item (Case, Category, or CaseFile) currently being acted 
+
+  /// The ID of the item (Case, Category, or CaseFile) currently being acted
   /// upon (e.g. while an options modal is open). Used to show a selection border.
   final int? longPressedId;
 
-  /// Transient, one-shot error message for the UI to surface (e.g. a SnackBar).
-  /// Unlike the other fields it is *not* preserved across [copyWith] calls — it
-  /// defaults back to null on the next emit so the same error can't linger or
-  /// re-fire. See [copyWith].
-  final String? errorMessage;
-
-  const LegalState({
-    this.status = LegalStatus.initial,
+  const NavigationState({
     this.activeTab = 'documents',
+    this.previousTab = 'documents',
     this.selectedCaseId,
     this.selectedCategoryId,
     this.selectedDate,
-    this.cases = const [],
-    this.upcomingHearings = const [],
     this.longPressedId,
-    this.errorMessage,
   });
 
   @override
   List<Object?> get props => [
-        status,
         activeTab,
+        previousTab,
         selectedCaseId,
         selectedCategoryId,
         selectedDate,
-        cases,
-        upcomingHearings,
         longPressedId,
-        errorMessage,
       ];
 
-  LegalState copyWith({
-    LegalStatus? status,
+  NavigationState copyWith({
     String? activeTab,
+    String? previousTab,
     Object? selectedCaseId = _undefined,
     Object? selectedCategoryId = _undefined,
     Object? selectedDate = _undefined,
-    List<Case>? cases,
-    List<Case>? upcomingHearings,
     Object? longPressedId = _undefined,
-    // Transient: intentionally *not* preserved. Any copyWith that doesn't pass
-    // it clears the message, so it only lives for the single emit that sets it.
-    String? errorMessage,
   }) {
-    return LegalState(
-      status: status ?? this.status,
+    return NavigationState(
       activeTab: activeTab ?? this.activeTab,
+      previousTab: previousTab ?? this.previousTab,
       selectedCaseId: identical(selectedCaseId, _undefined)
           ? this.selectedCaseId
           : selectedCaseId as int?,
@@ -73,12 +56,9 @@ class LegalState extends Equatable {
       selectedDate: identical(selectedDate, _undefined)
           ? this.selectedDate
           : selectedDate as DateTime?,
-      cases: cases ?? this.cases,
-      upcomingHearings: upcomingHearings ?? this.upcomingHearings,
       longPressedId: identical(longPressedId, _undefined)
           ? this.longPressedId
           : longPressedId as int?,
-      errorMessage: errorMessage,
     );
   }
 }

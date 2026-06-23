@@ -74,7 +74,7 @@ class LegalTheme {
       borderRadius: BorderRadius.circular(radius),
       boxShadow: [
         BoxShadow(
-            color: Colors.black.withOpacity(opacity),
+            color: Colors.black.withValues(alpha: opacity),
             blurRadius: blur,
             offset: Offset(0, dy)),
       ],
