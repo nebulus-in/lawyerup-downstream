@@ -1,296 +1,161 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter/material.dart';
+
 import '../../models/legal_models.dart';
+import '../../repositories/legal_repository.dart';
 
 part 'legal_event.dart';
 part 'legal_state.dart';
 
 class LegalBloc extends Bloc<LegalEvent, LegalState> {
-  LegalBloc()
-      : super(LegalState(
-          cases: [
-            Case(
-              id: 1,
-              name: 'Smith v. Johnson',
-              number: '2024-CV-0847',
-              court: 'Supreme Court, NY',
-              type: 'CIVIL',
-              typeColor: const Color(0xFF1463E0),
-              typeBg: const Color(0xFFE8F0FE),
-              docs: 24,
-              hearing: 'Jun 28',
-              uncategorizedFiles: const [
-                CaseFile(id: 1001, name: 'Initial_Consultation_Notes.docx', size: '1.2 MB', date: 'Jun 10'),
-                CaseFile(id: 1002, name: 'Client_Retainer_Agreement.pdf', size: '450 KB', date: 'Jun 11'),
-              ],
-              categories: const [
-                Category(
-                  id: 101,
-                  name: 'Pleadings',
-                  docs: 8,
-                  color: Color(0xFF1463E0),
-                  bg: Color(0xFFE8F0FE),
-                  files: [
-                    CaseFile(id: 1101, name: 'Complaint_SmithJohnson.pdf', size: '2.4 MB', date: 'Jun 21'),
-                    CaseFile(id: 1102, name: 'Answer_to_Complaint.pdf', size: '1.1 MB', date: 'Jun 23'),
-                  ],
-                ),
-                Category(
-                  id: 102,
-                  name: 'Evidence',
-                  docs: 6,
-                  color: Color(0xFF1A8A4A),
-                  bg: Color(0xFFE8F5EE),
-                  files: [
-                    CaseFile(id: 1201, name: 'Photo_Evidence_A.jpg', size: '4.5 MB', date: 'Jun 15'),
-                    CaseFile(id: 1202, name: 'Bank_Statements_2023.pdf', size: '8.2 MB', date: 'Jun 16'),
-                  ],
-                ),
-                Category(
-                  id: 103,
-                  name: 'Correspondence',
-                  docs: 5,
-                  color: Color(0xFF9B59B6),
-                  bg: Color(0xFFF5EEFF),
-                  files: [
-                    CaseFile(id: 1301, name: 'Email_Thread_Opposing_Counsel.pdf', size: '600 KB', date: 'Jun 20'),
-                  ],
-                ),
-                Category(
-                  id: 104,
-                  name: 'Court Orders',
-                  docs: 5,
-                  color: Color(0xFFE07A14),
-                  bg: Color(0xFFFFF4EC),
-                  files: [
-                    CaseFile(id: 1401, name: 'Court_Order_2024CV0847.pdf', size: '1.1 MB', date: 'Jun 18'),
-                  ],
-                ),
-              ],
-            ),
-            Case(
-              id: 2,
-              name: 'Mehta v. State Bank',
-              number: '2024-CR-0312',
-              court: 'High Court, Mumbai',
-              type: 'CRIMINAL',
-              typeColor: const Color(0xFFE07A14),
-              typeBg: const Color(0xFFFFF4EC),
-              docs: 17,
-              hearing: 'Jun 25',
-              uncategorizedFiles: const [
-                CaseFile(id: 2001, name: 'Fee_Receipt.pdf', size: '120 KB', date: 'May 20'),
-              ],
-              categories: const [
-                Category(
-                  id: 201,
-                  name: 'FIR',
-                  docs: 2,
-                  color: Color(0xFFC0392B),
-                  bg: Color(0xFFFCE8E8),
-                  files: [
-                    CaseFile(id: 2101, name: 'FIR_Copy_Official.pdf', size: '3.1 MB', date: 'May 10'),
-                  ],
-                ),
-                Category(
-                  id: 202,
-                  name: 'Evidence',
-                  docs: 7,
-                  color: Color(0xFF1A8A4A),
-                  bg: Color(0xFFE8F5EE),
-                  files: [
-                    CaseFile(id: 2201, name: 'CCTV_Footage_Transcript.docx', size: '2.2 MB', date: 'May 15'),
-                  ],
-                ),
-                Category(
-                  id: 203,
-                  name: 'Bail Documents',
-                  docs: 4,
-                  color: Color(0xFF1463E0),
-                  bg: Color(0xFFE8F0FE),
-                  files: [
-                    CaseFile(id: 2301, name: 'Bail_Application_Draft.pdf', size: '900 KB', date: 'May 25'),
-                    CaseFile(id: 2302, name: 'Surety_Bonds.pdf', size: '1.5 MB', date: 'May 26'),
-                  ],
-                ),
-                Category(
-                  id: 204,
-                  name: 'Witness Statements',
-                  docs: 4,
-                  color: Color(0xFF9B59B6),
-                  bg: Color(0xFFF5EEFF),
-                  files: [
-                    CaseFile(id: 2401, name: 'Witness_Statement_OCR.pdf', size: '890 KB', date: 'Jun 20'),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        )) {
-    on<TabChanged>((event, emit) {
+  final LegalRepository _repository;
+
+  static final DateTime _kToday = DateTime(2026, 6, 22);
+
+  LegalBloc({required LegalRepository repository})
+      : _repository = repository,
+        super(const LegalState()) {
+    on<LoadCases>(_onLoadCases);
+    on<TabChanged>(_onTabChanged);
+    on<CaseSelected>(_onCaseSelected);
+    on<CategorySelected>(_onCategorySelected);
+    on<DateSelected>(_onDateSelected);
+    on<CaseCreated>(_onCaseCreated);
+    on<CaseUpdated>(_onCaseUpdated);
+    on<CaseScheduled>(_onCaseScheduled);
+    on<CategoryAdded>(_onCategoryAdded);
+    on<FileUploaded>(_onFileUploaded);
+    
+    // Initial load
+    add(LoadCases());
+  }
+
+  Future<void> _onLoadCases(LoadCases event, Emitter<LegalState> emit) async {
+    emit(state.copyWith(status: LegalStatus.loading));
+    try {
+      final cases = await _repository.getCases();
       emit(state.copyWith(
-        activeTab: event.tab,
-        selectedCaseId: null,
-        selectedCategoryId: null,
-        selectedDate: null,
+        status: LegalStatus.success,
+        cases: cases,
+        upcomingHearings: _computeUpcoming(cases),
       ));
-    });
+    } catch (e) {
+      emit(state.copyWith(
+        status: LegalStatus.failure,
+        errorMessage: 'Could not load cases. Pull to retry.',
+      ));
+    }
+  }
 
-    on<CaseSelected>((event, emit) {
-      emit(state.copyWith(selectedCaseId: event.caseId, selectedCategoryId: null));
-    });
+  void _onTabChanged(TabChanged event, Emitter<LegalState> emit) {
+    emit(state.copyWith(
+      activeTab: event.tab,
+      selectedCaseId: null,
+      selectedCategoryId: null,
+      selectedDate: null,
+    ));
+  }
 
-    on<CategorySelected>((event, emit) {
-      emit(state.copyWith(selectedCategoryId: event.categoryId));
-    });
+  void _onCaseSelected(CaseSelected event, Emitter<LegalState> emit) {
+    emit(state.copyWith(selectedCaseId: event.caseId, selectedCategoryId: null));
+  }
 
-    on<DateSelected>((event, emit) {
-      emit(state.copyWith(selectedDate: event.date));
-    });
+  void _onCategorySelected(CategorySelected event, Emitter<LegalState> emit) {
+    emit(state.copyWith(selectedCategoryId: event.categoryId));
+  }
 
-    on<CaseCreated>((event, emit) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final palette = {
-        'CIVIL': [const Color(0xFF1463E0), const Color(0xFFE8F0FE)],
-        'CRIMINAL': [const Color(0xFFE07A14), const Color(0xFFFFF4EC)],
-        'FAMILY': [const Color(0xFF9B59B6), const Color(0xFFF5EEFF)],
-        'CORPORATE': [const Color(0xFF1A8A4A), const Color(0xFFE8F5EE)],
-      };
-      final colors = palette[event.type] ?? [const Color(0xFF718096), const Color(0xFFF0F2F5)];
+  void _onDateSelected(DateSelected event, Emitter<LegalState> emit) {
+    emit(state.copyWith(selectedDate: event.date));
+  }
 
-      // Folder accents cycle through the same order the create sheet previews
-      // and CategoryAdded uses, so a folder keeps the colour it was shown with.
-      const folderPalette = [
-        [Color(0xFF1463E0), Color(0xFFE8F0FE)],
-        [Color(0xFF1A8A4A), Color(0xFFE8F5EE)],
-        [Color(0xFF9B59B6), Color(0xFFF5EEFF)],
-        [Color(0xFFE07A14), Color(0xFFFFF4EC)],
-        [Color(0xFFC0392B), Color(0xFFFCE8E8)],
-      ];
-
-      final categories = <Category>[
-        for (var i = 0; i < event.folders.length; i++)
-          Category(
-            id: now + 1 + i,
-            name: event.folders[i],
-            docs: 0,
-            color: folderPalette[i % folderPalette.length][0],
-            bg: folderPalette[i % folderPalette.length][1],
-          ),
-      ];
-
-      final newCase = Case(
-        id: now,
+  Future<void> _onCaseCreated(CaseCreated event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.createCase(
         name: event.name,
-        number: event.number.isEmpty ? 'Pending' : event.number,
-        court: event.court.isEmpty ? 'TBD' : event.court,
+        number: event.number,
+        court: event.court,
         type: event.type,
-        typeColor: colors[0],
-        typeBg: colors[1],
-        docs: 0,
-        hearing: '-',
-        categories: categories,
+        folders: event.folders,
       );
-      emit(state.copyWith(cases: [...state.cases, newCase]));
-    });
+      emit(state.copyWith(
+        cases: cases,
+        upcomingHearings: _computeUpcoming(cases),
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not create the case. Please try again.'));
+    }
+  }
 
-    on<CaseUpdated>((event, emit) {
-      final palette = {
-        'CIVIL': [const Color(0xFF1463E0), const Color(0xFFE8F0FE)],
-        'CRIMINAL': [const Color(0xFFE07A14), const Color(0xFFFFF4EC)],
-        'FAMILY': [const Color(0xFF9B59B6), const Color(0xFFF5EEFF)],
-        'CORPORATE': [const Color(0xFF1A8A4A), const Color(0xFFE8F5EE)],
-      };
-      final colors = palette[event.type] ??
-          [const Color(0xFF718096), const Color(0xFFF0F2F5)];
-
-      final updatedCases = state.cases.map((c) {
-        if (c.id == event.caseId) {
-          return c.copyWith(
-            name: event.name.isEmpty ? c.name : event.name,
-            number: event.number.isEmpty ? 'Pending' : event.number,
-            court: event.court.isEmpty ? 'TBD' : event.court,
-            type: event.type,
-            typeColor: colors[0],
-            typeBg: colors[1],
-            hearing: event.hearing,
-          );
-        }
-        return c;
-      }).toList();
-      emit(state.copyWith(cases: updatedCases));
-    });
-
-    on<CaseScheduled>((event, emit) {
-      final updatedCases = state.cases
-          .map((c) =>
-              c.id == event.caseId ? c.copyWith(hearing: event.hearing) : c)
-          .toList();
-      emit(state.copyWith(cases: updatedCases));
-    });
-
-    on<CategoryAdded>((event, emit) {
-      final palette = [
-        [const Color(0xFF1463E0), const Color(0xFFE8F0FE)],
-        [const Color(0xFF1A8A4A), const Color(0xFFE8F5EE)],
-        [const Color(0xFF9B59B6), const Color(0xFFF5EEFF)],
-        [const Color(0xFFE07A14), const Color(0xFFFFF4EC)],
-        [const Color(0xFFC0392B), const Color(0xFFFCE8E8)],
-      ];
-
-      final updatedCases = state.cases.map((c) {
-        if (c.id == event.caseId) {
-          final colors = palette[c.categories.length % palette.length];
-          return c.copyWith(
-            categories: [
-              ...c.categories,
-              Category(
-                id: DateTime.now().millisecondsSinceEpoch,
-                name: event.name,
-                docs: 0,
-                color: colors[0],
-                bg: colors[1],
-              )
-            ],
-          );
-        }
-        return c;
-      }).toList();
-      emit(state.copyWith(cases: updatedCases));
-    });
-
-    on<FileUploaded>((event, emit) {
-      final newFile = CaseFile(
-        id: DateTime.now().millisecondsSinceEpoch,
-        name: 'Simulated_Upload.pdf',
-        size: '1.5 MB',
-        date: 'Just now',
+  Future<void> _onCaseUpdated(CaseUpdated event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.updateCaseDetails(
+        caseId: event.caseId,
+        name: event.name,
+        number: event.number,
+        court: event.court,
+        type: event.type,
+        hearing: event.hearing,
       );
+      emit(state.copyWith(
+        cases: cases,
+        upcomingHearings: _computeUpcoming(cases),
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not save the case. Please try again.'));
+    }
+  }
 
-      final updatedCases = state.cases.map((c) {
-        if (c.id == event.caseId) {
-          if (event.categoryName != null && event.categoryName != 'Uncategorized') {
-            final updatedCats = c.categories.map((cat) {
-              if (cat.name == event.categoryName) {
-                return cat.copyWith(
-                  docs: cat.docs + 1,
-                  files: [...cat.files, newFile],
-                );
-              }
-              return cat;
-            }).toList();
-            return c.copyWith(categories: updatedCats, docs: c.docs + 1);
-          } else {
-            return c.copyWith(
-              uncategorizedFiles: [...c.uncategorizedFiles, newFile],
-              docs: c.docs + 1,
-            );
-          }
-        }
-        return c;
-      }).toList();
-      emit(state.copyWith(cases: updatedCases));
+  Future<void> _onCaseScheduled(CaseScheduled event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.scheduleHearing(event.caseId, event.hearing);
+      emit(state.copyWith(
+        cases: cases,
+        upcomingHearings: _computeUpcoming(cases),
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not schedule the hearing. Please try again.'));
+    }
+  }
+
+  Future<void> _onCategoryAdded(CategoryAdded event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.addCategory(event.caseId, event.name);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not add the folder. Please try again.'));
+    }
+  }
+
+  Future<void> _onFileUploaded(FileUploaded event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.uploadFile(event.caseId, event.categoryName);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: 'Could not upload the file. Please try again.'));
+    }
+  }
+
+  List<Case> _computeUpcoming(List<Case> cases) {
+    final upcoming = <(Case, DateTime)>[];
+    for (final c in cases) {
+      final date = c.hearingDate;
+      if (date == null || date.isBefore(_kToday)) continue;
+      upcoming.add((c, date));
+    }
+    upcoming.sort((a, b) {
+      final byDate = a.$2.compareTo(b.$2);
+      return byDate != 0 ? byDate : a.$1.name.compareTo(b.$1.name);
     });
+
+    final days = <DateTime>{};
+    final result = <Case>[];
+    for (final entry in upcoming) {
+      if (!days.contains(entry.$2)) {
+        if (days.length == 2) break;
+        days.add(entry.$2);
+      }
+      result.add(entry.$1);
+    }
+    return result;
   }
 }

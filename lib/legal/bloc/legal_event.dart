@@ -6,6 +6,8 @@ abstract class LegalEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class LoadCases extends LegalEvent {}
+
 class TabChanged extends LegalEvent {
   final String tab;
   const TabChanged(this.tab);
@@ -28,7 +30,7 @@ class CategorySelected extends LegalEvent {
 }
 
 class DateSelected extends LegalEvent {
-  final String? date;
+  final DateTime? date;
   const DateSelected(this.date);
   @override
   List<Object?> get props => [date];
@@ -39,10 +41,6 @@ class CaseCreated extends LegalEvent {
   final String number;
   final String court;
   final String type;
-
-  /// Folders to create inside the new case, in display order. Comes from the
-  /// create sheet's editable starter list (the type template, minus removals,
-  /// plus any the user added).
   final List<String> folders;
 
   const CaseCreated({
@@ -77,7 +75,7 @@ class CaseUpdated extends LegalEvent {
 
 class CaseScheduled extends LegalEvent {
   final int caseId;
-  final String hearing; // e.g. 'Jun 25'
+  final String hearing;
   const CaseScheduled(this.caseId, this.hearing);
   @override
   List<Object?> get props => [caseId, hearing];
