@@ -11,6 +11,25 @@ const _kPage = Color(0xFFEEF1F5);
 const _kMuted = Color(0xFF9AA3B2);
 const _kField = Color(0xFFF4F6FA);
 
+// The app runs in a fixed June 2026 context (matches the calendar's "today").
+final DateTime _kToday = DateTime(2026, 6, 22);
+
+const _kMonthAbbr = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+// Parses a stored 'MMM d' hearing label (e.g. 'Jun 25') into a date in the
+// app's 2026 context. Returns null for unscheduled ('-') or malformed values.
+DateTime? _parseHearingDate(String h) {
+  final parts = h.split(' ');
+  if (parts.length != 2) return null;
+  final m = _kMonthAbbr.indexOf(parts[0]);
+  final d = int.tryParse(parts[1]);
+  if (m < 0 || d == null) return null;
+  return DateTime(2026, m + 1, d);
+}
+
 // Folder accent pairs [stroke, fill], cycled by position. Kept in the same
 // order as the bloc so a folder previews with the colour it will keep.
 const _kFolderPalette = <List<Color>>[
@@ -408,6 +427,62 @@ class LegalView extends StatelessWidget {
   }
 
   Widget _buildHearingsCard(LegalState state) {
+    // Upcoming hearings (today or later), earliest first; ties broken by name
+    // so same-day hearings keep a stable order.
+    final upcoming = <(Case, DateTime)>[];
+    for (final c in state.cases) {
+      final date = _parseHearingDate(c.hearing);
+      if (date == null || date.isBefore(_kToday)) continue;
+      upcoming.add((c, date));
+    }
+    upcoming.sort((a, b) {
+      final byDate = a.$2.compareTo(b.$2);
+      return byDate != 0 ? byDate : a.$1.name.compareTo(b.$1.name);
+    });
+
+    // Show the next 2 hearing days, including every hearing that falls on them,
+    // so same-day hearings are never truncated.
+    final days = <DateTime>{};
+    final shown = <(Case, DateTime)>[];
+    for (final entry in upcoming) {
+      if (!days.contains(entry.$2)) {
+        if (days.length == 2) break;
+        days.add(entry.$2);
+      }
+      shown.add(entry);
+    }
+
+    final rows = <Widget>[];
+    for (var i = 0; i < shown.length; i++) {
+      if (i > 0) {
+        rows.add(Divider(
+            height: 1, color: Colors.grey[100], indent: 16, endIndent: 16));
+      }
+      rows.add(_buildHearingRowForCase(shown[i].$1, shown[i].$2));
+    }
+
+    Widget body;
+    if (shown.isEmpty) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        child: Center(
+          child: Text('No upcoming hearings',
+              style: TextStyle(
+                  fontSize: 12.5, color: _kMuted, fontWeight: FontWeight.w600)),
+        ),
+      );
+    } else {
+      final content = Column(mainAxisSize: MainAxisSize.min, children: rows);
+      // Above 3 rows the card stays compact and scrolls; the partial 4th row
+      // peeking through signals there's more to see.
+      body = shown.length > 3
+          ? ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 252),
+              child: SingleChildScrollView(child: content),
+            )
+          : content;
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -419,15 +494,20 @@ class LegalView extends StatelessWidget {
               offset: const Offset(0, 4))
         ],
       ),
-      child: Column(
-        children: [
-          _buildHearingRow('Mehta v. State Bank', '9:30 AM · High Court, Mumbai',
-              'JUN', '25', 'CRIMINAL', const Color(0xFFE07A14), const Color(0xFFFFF4EC)),
-          Divider(height: 1, color: Colors.grey[100], indent: 16, endIndent: 16),
-          _buildHearingRow('Smith v. Johnson', '10:00 AM · Supreme Court, NY',
-              'JUN', '28', 'CIVIL', _kBlue, _kBlueBg),
-        ],
-      ),
+      clipBehavior: Clip.antiAlias,
+      child: body,
+    );
+  }
+
+  Widget _buildHearingRowForCase(Case c, DateTime date) {
+    return _buildHearingRow(
+      c.name,
+      '${_weekdayName(date.weekday).substring(0, 3)} · ${c.court}',
+      _kMonthAbbr[date.month - 1].toUpperCase(),
+      '${date.day}',
+      c.type,
+      c.typeColor,
+      c.typeBg,
     );
   }
 
