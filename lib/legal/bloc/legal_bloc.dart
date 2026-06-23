@@ -27,6 +27,7 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
     on<CategoryAdded>(_onCategoryAdded);
     on<FileUploaded>(_onFileUploaded);
     on<DocumentScanned>(_onDocumentScanned);
+    on<OcrTextSaved>(_onOcrTextSaved);
     
     // Initial load
     add(LoadCases());
@@ -146,6 +147,22 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
     } catch (e) {
       emit(state.copyWith(
           errorMessage: 'Could not save the scanned document. Please try again.'));
+    }
+  }
+
+  Future<void> _onOcrTextSaved(
+      OcrTextSaved event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.saveOcrText(
+        caseId: event.caseId,
+        categoryName: event.categoryName,
+        text: event.text,
+        fileName: event.fileName,
+      );
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(
+          errorMessage: 'Could not save OCR text. Please try again.'));
     }
   }
 

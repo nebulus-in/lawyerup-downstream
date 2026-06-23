@@ -105,3 +105,20 @@ class DocumentScanned extends LegalEvent {
   @override
   List<Object?> get props => [caseId, categoryName, document.path];
 }
+
+class OcrTextSaved extends LegalEvent {
+  final int caseId;
+  final String? categoryName;
+  final String text;
+  final String fileName;
+
+  const OcrTextSaved({
+    required this.caseId,
+    this.categoryName,
+    required this.text,
+    required this.fileName,
+  });
+
+  @override
+  List<Object?> get props => [caseId, categoryName, text, fileName];
+}

@@ -208,6 +208,21 @@ class LegalRepository {
     return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
   }
 
+  Future<List<Case>> saveOcrText({
+    required int caseId,
+    String? categoryName,
+    required String text,
+    required String fileName,
+  }) async {
+    final file = CaseFile(
+      id: DateTime.now().millisecondsSinceEpoch,
+      name: fileName,
+      size: '${(text.length / 1024).toStringAsFixed(1)} KB',
+      date: 'Just now',
+    );
+    return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
+  }
+
   /// Replaces the case matching [caseId] with [transform] applied to it and
   /// returns the updated, unmodifiable case list.
   List<Case> _apply(int caseId, Case Function(Case) transform) {

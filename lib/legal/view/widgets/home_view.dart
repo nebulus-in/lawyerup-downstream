@@ -185,7 +185,7 @@ class _QuickActions extends StatelessWidget {
         _ActionChip(
           icon: Icons.text_fields,
           label: 'OCR Text',
-          onTap: () {},
+          onTap: () => LegalModals.startOcr(context),
         ),
         const SizedBox(width: 9),
         _ActionChip(

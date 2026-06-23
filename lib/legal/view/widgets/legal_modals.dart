@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/legal_bloc.dart';
 import '../../../models/legal_models.dart';
 import '../../../services/document_scanner_service.dart';
+import '../../../services/ocr_service.dart';
 
 class LegalModals {
   static void showNotifications(BuildContext context, LegalState state) {
@@ -383,6 +385,194 @@ class LegalModals {
     }
   }
 
+  static Future<void> startOcr(BuildContext context) async {
+    final ocrService = OcrService();
+    try {
+      final text = await ocrService.pickAndRecognizeText();
+      if (text != null && context.mounted) {
+        showOcrResult(context, text);
+      }
+    } finally {
+      ocrService.dispose();
+    }
+  }
+
+  static void showOcrResult(BuildContext context, String text) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Extracted Text',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                IconButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: text));
+                    snack(context, 'Text copied to clipboard');
+                  },
+                  icon: const Icon(Icons.copy_rounded, color: LegalTheme.blue),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: LegalTheme.field,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: LegalTheme.ink,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(modalContext),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 50),
+                      side: const BorderSide(color: LegalTheme.page),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Done',
+                        style: TextStyle(
+                            color: LegalTheme.ink,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(modalContext);
+                      _pickCaseAndFolderForOcr(context, text);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: LegalTheme.blue,
+                      minimumSize: const Size(0, 50),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('Save to Case',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static void _pickCaseAndFolderForOcr(BuildContext context, String text) {
+    final state = context.read<LegalBloc>().state;
+    showCasePicker(
+      context,
+      state,
+      title: 'Save OCR result',
+      subtitle: 'Select a case to save this extracted text',
+      onPick: (c) {
+        if (c.categories.isEmpty) {
+          context.read<LegalBloc>().add(OcrTextSaved(
+                caseId: c.id,
+                text: text,
+                fileName: 'OCR_Result_${DateTime.now().millisecondsSinceEpoch}.txt',
+              ));
+          snack(context, 'Text saved to ${c.name}');
+        } else {
+          _pickFolderForOcr(context, c, text);
+        }
+      },
+    );
+  }
+
+  static void _pickFolderForOcr(BuildContext context, Case c, String text) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            const Text('Select Folder',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Save to ${c.name}',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    color: LegalTheme.muted,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(modalContext);
+                      context.read<LegalBloc>().add(OcrTextSaved(
+                            caseId: c.id,
+                            text: text,
+                            fileName: 'OCR_Result_${DateTime.now().millisecondsSinceEpoch}.txt',
+                          ));
+                      snack(context, 'Text saved to ${c.name}');
+                    },
+                    child: _FolderPickerItem(name: 'General (Uncategorized)'),
+                  ),
+                  ...c.categories.map((cat) => GestureDetector(
+                        onTap: () {
+                          Navigator.pop(modalContext);
+                          context.read<LegalBloc>().add(OcrTextSaved(
+                                caseId: c.id,
+                                categoryName: cat.name,
+                                text: text,
+                                fileName: 'OCR_Result_${cat.name}.txt',
+                              ));
+                          snack(context, 'Text saved to ${cat.name}');
+                        },
+                        child: _FolderPickerItem(name: cat.name),
+                      )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   static Widget grabber() {
     return Center(
       child: Container(
@@ -439,6 +629,32 @@ class LegalModals {
                   borderSide: const BorderSide(color: LegalTheme.page)),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FolderPickerItem extends StatelessWidget {
+  final String name;
+  const _FolderPickerItem({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+          color: LegalTheme.field, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          const Icon(Icons.folder_rounded, color: LegalTheme.muted, size: 20),
+          const SizedBox(width: 12),
+          Text(name,
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: LegalTheme.ink)),
+          const Spacer(),
+          const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18),
         ],
       ),
     );
