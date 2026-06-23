@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 
 import '../../models/legal_models.dart';
 import '../../repositories/legal_repository.dart';
+import '../../services/document_scanner_service.dart';
 
 part 'legal_event.dart';
 part 'legal_state.dart';
@@ -25,6 +26,7 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
     on<CaseScheduled>(_onCaseScheduled);
     on<CategoryAdded>(_onCategoryAdded);
     on<FileUploaded>(_onFileUploaded);
+    on<DocumentScanned>(_onDocumentScanned);
     
     // Initial load
     add(LoadCases());
@@ -132,6 +134,18 @@ class LegalBloc extends Bloc<LegalEvent, LegalState> {
       emit(state.copyWith(cases: cases));
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Could not upload the file. Please try again.'));
+    }
+  }
+
+  Future<void> _onDocumentScanned(
+      DocumentScanned event, Emitter<LegalState> emit) async {
+    try {
+      final cases = await _repository.addScannedDocument(
+          event.caseId, event.categoryName, event.document);
+      emit(state.copyWith(cases: cases));
+    } catch (e) {
+      emit(state.copyWith(
+          errorMessage: 'Could not save the scanned document. Please try again.'));
     }
   }
 

@@ -6,15 +6,23 @@ class CaseFile extends Equatable {
   final String size;
   final String date;
 
+  /// Absolute path to a locally stored file (e.g. a scanned PDF), or null for
+  /// records that don't point at a file on disk.
+  final String? path;
+
   const CaseFile({
     required this.id,
     required this.name,
     required this.size,
     required this.date,
+    this.path,
   });
 
+  /// Whether this record points at a file that can be opened on the device.
+  bool get isLocal => path != null;
+
   @override
-  List<Object?> get props => [id, name, size, date];
+  List<Object?> get props => [id, name, size, date, path];
 }
 
 class Category extends Equatable {

@@ -1,4 +1,5 @@
 import '../models/legal_models.dart';
+import '../services/document_scanner_service.dart';
 
 class LegalRepository {
   List<Case> _cases = [
@@ -189,6 +190,20 @@ class LegalRepository {
       name: 'Simulated_Upload.pdf',
       size: '1.5 MB',
       date: 'Just now',
+    );
+    return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
+  }
+
+  /// Files a scanned PDF under [categoryName] (or the uncategorized bucket),
+  /// keeping the on-disk path so the document can be reopened later.
+  Future<List<Case>> addScannedDocument(
+      int caseId, String? categoryName, ScannedDocument doc) async {
+    final file = CaseFile(
+      id: DateTime.now().millisecondsSinceEpoch,
+      name: doc.fileName,
+      size: doc.sizeLabel,
+      date: 'Just now',
+      path: doc.path,
     );
     return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
   }

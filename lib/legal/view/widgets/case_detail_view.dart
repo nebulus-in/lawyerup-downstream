@@ -89,11 +89,14 @@ class CaseDetailView extends StatelessWidget {
           bottom: 20,
           right: 20,
           child: FloatingActionButton(
-            onPressed: () => context
-                .read<LegalBloc>()
-                .add(FileUploaded(selectedCase.id, null)),
+            onPressed: () => LegalModals.showAddDocumentSheet(
+              context,
+              caseId: selectedCase.id,
+              destinationLabel: selectedCase.name,
+            ),
             backgroundColor: LegalTheme.blue,
-            child: const Icon(Icons.upload, color: Colors.white),
+            tooltip: 'Add document',
+            child: const Icon(Icons.add, color: Colors.white),
           ),
         )
       ],

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/legal_bloc.dart';
 import 'shared_widgets.dart';
+import 'legal_modals.dart';
 
 class CategoryDetailView extends StatelessWidget {
   const CategoryDetailView({super.key});
@@ -78,11 +79,15 @@ class CategoryDetailView extends StatelessWidget {
           bottom: 20,
           right: 20,
           child: FloatingActionButton(
-            onPressed: () => context
-                .read<LegalBloc>()
-                .add(FileUploaded(selectedCase.id, cat.name)),
+            onPressed: () => LegalModals.showAddDocumentSheet(
+              context,
+              caseId: selectedCase.id,
+              categoryName: cat.name,
+              destinationLabel: cat.name,
+            ),
             backgroundColor: LegalTheme.blue,
-            child: const Icon(Icons.upload, color: Colors.white),
+            tooltip: 'Add document',
+            child: const Icon(Icons.add, color: Colors.white),
           ),
         )
       ],

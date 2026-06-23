@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/legal_bloc.dart';
 import '../../../models/legal_models.dart';
+import '../../../services/document_scanner_service.dart';
 
 class LegalModals {
   static void showNotifications(BuildContext context, LegalState state) {
@@ -292,6 +293,96 @@ class LegalModals {
     );
   }
 
+  /// Offers the two ways to add a document — scan a physical one, or upload an
+  /// existing file. [destinationLabel] names where it lands (a case or folder).
+  static void showAddDocumentSheet(
+    BuildContext context, {
+    required int caseId,
+    String? categoryName,
+    required String destinationLabel,
+  }) {
+    final canScan = DocumentScannerService.instance.isSupported;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: LegalTheme.sheetDecoration,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            grabber(),
+            const SizedBox(height: 14),
+            const Text('Add document',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Add to $destinationLabel',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    color: LegalTheme.muted,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            _DocActionRow(
+              icon: Icons.document_scanner_rounded,
+              accent: LegalTheme.blue,
+              accentBg: LegalTheme.blueBg,
+              title: 'Scan document',
+              subtitle: canScan
+                  ? 'Capture pages with the camera and save as PDF'
+                  : 'Available on Android and iOS',
+              enabled: canScan,
+              onTap: () {
+                Navigator.pop(modalContext);
+                scanInto(context, caseId: caseId, categoryName: categoryName);
+              },
+            ),
+            const SizedBox(height: 10),
+            _DocActionRow(
+              icon: Icons.upload_file_rounded,
+              accent: const Color(0xFF1A8A4A),
+              accentBg: const Color(0xFFE8F5EE),
+              title: 'Upload file',
+              subtitle: 'Add a document already on your device',
+              enabled: true,
+              onTap: () {
+                Navigator.pop(modalContext);
+                context.read<LegalBloc>().add(FileUploaded(caseId, categoryName));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Launches the scanner and files the resulting PDF into [caseId] (optionally
+  /// under [categoryName]). The scanner UI lives in a separate activity, so we
+  /// grab the bloc and messenger up front — [context] may rebuild while the
+  /// camera is open.
+  static Future<void> scanInto(
+    BuildContext context, {
+    required int caseId,
+    String? categoryName,
+  }) async {
+    final bloc = context.read<LegalBloc>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final doc = await DocumentScannerService.instance.scan();
+      if (doc == null) return; // Cancelled — nothing to say.
+      bloc.add(DocumentScanned(caseId, categoryName, doc));
+      _snack(
+        messenger,
+        doc.pageCount > 0
+            ? 'Document scanned · ${doc.pageCount} '
+                '${doc.pageCount == 1 ? 'page' : 'pages'} saved'
+            : 'Document scanned and saved',
+      );
+    } on DocumentScanException catch (e) {
+      _snack(messenger, e.message);
+    }
+  }
+
   static Widget grabber() {
     return Center(
       child: Container(
@@ -304,8 +395,14 @@ class LegalModals {
     );
   }
 
-  static void snack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
+  static void snack(BuildContext context, String message) =>
+      _snack(ScaffoldMessenger.of(context), message);
+
+  /// Shows a snack from a [ScaffoldMessengerState] captured earlier — used when
+  /// the originating widget (e.g. a bottom sheet) is gone by the time the
+  /// message is ready, as with the document scanner's async result.
+  static void _snack(ScaffoldMessengerState messenger, String message) {
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(message,
@@ -344,6 +441,82 @@ class LegalModals {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DocActionRow extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final Color accentBg;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _DocActionRow({
+    required this.icon,
+    required this.accent,
+    required this.accentBg,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+            color: LegalTheme.field, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                  color: enabled ? accentBg : const Color(0xFFECEEF2),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon,
+                  color: enabled ? accent : LegalTheme.muted, size: 21),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: LegalTheme.ink)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: LegalTheme.muted)),
+                ],
+              ),
+            ),
+            if (enabled)
+              const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18)
+            else
+              const Icon(Icons.lock_outline_rounded,
+                  color: LegalTheme.muted, size: 16),
+          ],
+        ),
+      ),
+    );
+
+    if (!enabled) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: row,
     );
   }
 }

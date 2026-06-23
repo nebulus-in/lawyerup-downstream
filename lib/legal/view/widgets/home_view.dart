@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/legal_bloc.dart';
 import '../../../models/legal_models.dart';
+import '../../../services/document_scanner_service.dart';
 import 'legal_modals.dart';
 
 class HomeView extends StatelessWidget {
@@ -155,21 +156,28 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canScan = DocumentScannerService.instance.isSupported;
+
     return Row(
       children: [
         _ActionChip(
           icon: Icons.center_focus_weak,
           label: 'Scan Doc',
+          enabled: canScan,
           onTap: () {
+            if (!canScan) {
+              LegalModals.snack(
+                  context, 'Scanning is available on Android and iOS.');
+              return;
+            }
             final state = context.read<LegalBloc>().state;
             LegalModals.showCasePicker(
               context,
               state,
               title: 'Scan to case',
               subtitle: 'Choose where the scanned document is filed',
-              onPick: (c) {
-                context.read<LegalBloc>().add(FileUploaded(c.id, null));
-              },
+              emptyText: 'Create a case first to file your scan.',
+              onPick: (c) => LegalModals.scanInto(context, caseId: c.id),
             );
           },
         ),
@@ -200,11 +208,13 @@ class _ActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool enabled;
 
   const _ActionChip({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.enabled = true,
   });
 
   @override
@@ -213,20 +223,25 @@ class _ActionChip extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: LegalTheme.cardDecoration(),
-          child: Column(
-            children: [
-              Icon(icon, color: LegalTheme.blue, size: 20),
-              const SizedBox(height: 6),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: LegalTheme.ink),
-                  textAlign: TextAlign.center),
-            ],
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: LegalTheme.cardDecoration(),
+            child: Column(
+              children: [
+                Icon(icon,
+                    color: enabled ? LegalTheme.blue : LegalTheme.muted,
+                    size: 20),
+                const SizedBox(height: 6),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: LegalTheme.ink),
+                    textAlign: TextAlign.center),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 import '../legal_theme.dart';
 import '../../../models/legal_models.dart';
+import 'legal_modals.dart';
 
 class DetailHeader extends StatelessWidget {
   final VoidCallback onBack;
@@ -67,9 +69,25 @@ class FileItem extends StatelessWidget {
   final CaseFile file;
   const FileItem({super.key, required this.file});
 
+  /// Opens a locally stored document with the system viewer, surfacing a clear
+  /// message when nothing can handle it.
+  Future<void> _open(BuildContext context) async {
+    final result = await OpenFilex.open(file.path!);
+    if (result.type == ResultType.done || !context.mounted) return;
+    final message = switch (result.type) {
+      ResultType.noAppToOpen => 'No app on this device can open PDFs.',
+      ResultType.fileNotFound => 'This document is no longer available.',
+      ResultType.permissionDenied => 'Permission denied opening this document.',
+      _ => "Couldn't open this document.",
+    };
+    LegalModals.snack(context, message);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final openable = file.isLocal;
+
+    final content = Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: LegalTheme.cardDecoration(),
@@ -79,10 +97,12 @@ class FileItem extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-                color: const Color(0xFFF0F2F5),
+                color: openable ? LegalTheme.blueBg : const Color(0xFFF0F2F5),
                 borderRadius: BorderRadius.circular(10)),
-            child:
-                const Icon(Icons.description, color: Color(0xFFAAB2BF), size: 18),
+            child: Icon(
+                openable ? Icons.picture_as_pdf_rounded : Icons.description,
+                color: openable ? LegalTheme.blue : const Color(0xFFAAB2BF),
+                size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -102,8 +122,18 @@ class FileItem extends StatelessWidget {
               ],
             ),
           ),
+          if (openable)
+            const Icon(Icons.open_in_new_rounded,
+                color: LegalTheme.muted, size: 16),
         ],
       ),
+    );
+
+    if (!openable) return content;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _open(context),
+      child: content,
     );
   }
 }

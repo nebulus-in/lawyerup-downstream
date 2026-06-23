@@ -96,3 +96,12 @@ class FileUploaded extends LegalEvent {
   @override
   List<Object?> get props => [caseId, categoryName];
 }
+
+class DocumentScanned extends LegalEvent {
+  final int caseId;
+  final String? categoryName;
+  final ScannedDocument document;
+  const DocumentScanned(this.caseId, this.categoryName, this.document);
+  @override
+  List<Object?> get props => [caseId, categoryName, document.path];
+}
