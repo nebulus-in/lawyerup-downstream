@@ -997,6 +997,217 @@ class LegalModals {
       ),
     );
   }
+
+  /// Opens a sheet to pick a month and year using standard iOS/Android style scroll wheel picker columns.
+  static void showMonthYearPicker(
+    BuildContext context, {
+    required DateTime initialDate,
+    required DateTime minDate,
+    required DateTime maxDate,
+    required void Function(DateTime) onSelected,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => _MonthYearWheelPickerSheet(
+        initialDate: initialDate,
+        minDate: minDate,
+        maxDate: maxDate,
+        onSelected: (date) {
+          Navigator.pop(modalContext);
+          onSelected(date);
+        },
+      ),
+    );
+  }
+}
+
+class _MonthYearWheelPickerSheet extends StatefulWidget {
+  final DateTime initialDate;
+  final DateTime minDate;
+  final DateTime maxDate;
+  final ValueChanged<DateTime> onSelected;
+
+  const _MonthYearWheelPickerSheet({
+    required this.initialDate,
+    required this.minDate,
+    required this.maxDate,
+    required this.onSelected,
+  });
+
+  @override
+  State<_MonthYearWheelPickerSheet> createState() => _MonthYearWheelPickerSheetState();
+}
+
+class _MonthYearWheelPickerSheetState extends State<_MonthYearWheelPickerSheet> {
+  late FixedExtentScrollController _monthController;
+  late FixedExtentScrollController _yearController;
+  late List<int> _years;
+  late int _selectedMonthIndex;
+  late int _selectedYearIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _years = [];
+    for (var y = widget.minDate.year; y <= widget.maxDate.year; y++) {
+      _years.add(y);
+    }
+
+    final initMonth = widget.initialDate.month;
+    final initYear = widget.initialDate.year;
+
+    _selectedMonthIndex = initMonth - 1;
+    _selectedYearIndex = _years.indexOf(initYear);
+    if (_selectedYearIndex == -1) _selectedYearIndex = 0;
+
+    _monthController = FixedExtentScrollController(initialItem: _selectedMonthIndex);
+    _yearController = FixedExtentScrollController(initialItem: _selectedYearIndex);
+  }
+
+  @override
+  void dispose() {
+    _monthController.dispose();
+    _yearController.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final year = _years[_selectedYearIndex];
+    final month = _selectedMonthIndex + 1;
+    var targetDate = DateTime(year, month);
+
+    if (targetDate.isBefore(widget.minDate)) {
+      targetDate = widget.minDate;
+    } else if (targetDate.isAfter(widget.maxDate)) {
+      targetDate = widget.maxDate;
+    }
+
+    widget.onSelected(targetDate);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      decoration: LegalTheme.sheetDecoration,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LegalModals.grabber(),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Select Date',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  const Text('Scroll columns to choose month and year',
+                      style: TextStyle(fontSize: 12.5, color: LegalTheme.muted, fontWeight: FontWeight.w500)),
+                ],
+              ),
+              GestureDetector(
+                onTap: _confirm,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: LegalTheme.blue,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 180,
+            child: Row(
+              children: [
+                // Year picker
+                Expanded(
+                  child: ListWheelScrollView.useDelegate(
+                    controller: _yearController,
+                    itemExtent: 38,
+                    perspective: 0.006,
+                    diameterRatio: 1.2,
+                    physics: const FixedExtentScrollPhysics(),
+                    onSelectedItemChanged: (index) {
+                      setState(() => _selectedYearIndex = index);
+                    },
+                    childDelegate: ListWheelChildBuilderDelegate(
+                      childCount: _years.length,
+                      builder: (context, index) {
+                        final active = _selectedYearIndex == index;
+                        return Center(
+                          child: Text(
+                            '${_years[index]}',
+                            style: TextStyle(
+                              fontSize: active ? 16.5 : 14.5,
+                              fontWeight:
+                              active ? FontWeight.w700 : FontWeight.w500,
+                              color: active
+                                  ? LegalTheme.blue
+                                  : LegalTheme.ink.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                Container(
+                  width: 1,
+                  height: 140,
+                  color: LegalTheme.page,
+                ),
+
+                // Month picker
+                Expanded(
+                  child: ListWheelScrollView.useDelegate(
+                    controller: _monthController,
+                    itemExtent: 38,
+                    perspective: 0.006,
+                    diameterRatio: 1.2,
+                    physics: const FixedExtentScrollPhysics(),
+                    onSelectedItemChanged: (index) {
+                      setState(() => _selectedMonthIndex = index);
+                    },
+                    childDelegate: ListWheelChildBuilderDelegate(
+                      childCount: 12,
+                      builder: (context, index) {
+                        final active = _selectedMonthIndex == index;
+                        return Center(
+                          child: Text(
+                            LegalTheme.monthFull[index],
+                            style: TextStyle(
+                              fontSize: active ? 16.5 : 14.5,
+                              fontWeight:
+                              active ? FontWeight.w700 : FontWeight.w500,
+                              color: active
+                                  ? LegalTheme.blue
+                                  : LegalTheme.ink.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _OptionRow extends StatelessWidget {

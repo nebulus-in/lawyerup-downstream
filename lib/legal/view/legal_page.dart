@@ -438,7 +438,7 @@ class _ModalHeader extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('June ${date.day}',
+            Text('${LegalTheme.monthName(date.month)} ${date.day}',
                 style: const TextStyle(
                     fontSize: 19, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
@@ -569,7 +569,7 @@ class _AddCaseToDayButton extends StatelessWidget {
         LegalModals.showCasePicker(
           context,
           caseState,
-          title: 'Add to June ${date.day}',
+          title: 'Add to ${LegalTheme.monthName(date.month)} ${date.day}',
           subtitle: 'Pick a case to set its next hearing for this day',
           where: (c) => c.hearing != label,
           trailingHint: (c) => c.isScheduled ? 'Now ${c.hearing}' : null,

@@ -14,6 +14,21 @@ class LegalTheme {
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
 
+  static const monthFull = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  /// Full month name for a 1-based month number (1 = January).
+  static String monthName(int month) => monthFull[(month - 1) % 12];
+
+  static const weekdayAbbr = [
+    'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'
+  ];
+
+  /// Short upper-case weekday for a 1-based weekday (1 = Monday).
+  static String weekdayShort(int weekday) => weekdayAbbr[(weekday - 1) % 7];
+
   static const _casePalette = {
     'CIVIL': [Color(0xFF1463E0), Color(0xFFE8F0FE)],
     'CRIMINAL': [Color(0xFFE07A14), Color(0xFFFFF4EC)],
