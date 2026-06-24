@@ -127,3 +127,17 @@ String formatFileSize(int bytes) {
   final mb = kb / 1024;
   return '${mb.toStringAsFixed(mb < 10 ? 1 : 0)} MB';
 }
+
+/// Returns a path inside [dir] for [name], suffixing `_1`, `_2`, … if a file
+/// with that name already exists so a new file never clobbers an earlier one.
+String uniqueFilePath(String dir, String name) {
+  if (!File('$dir/$name').existsSync()) return '$dir/$name';
+  final dot = name.lastIndexOf('.');
+  final base = dot < 0 ? name : name.substring(0, dot);
+  final ext = dot < 0 ? '' : name.substring(dot);
+  var i = 1;
+  while (File('$dir/${base}_$i$ext').existsSync()) {
+    i++;
+  }
+  return '$dir/${base}_$i$ext';
+}

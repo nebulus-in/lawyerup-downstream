@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../models/legal_models.dart';
+import '../services/docx_to_pdf_service.dart';
 import '../services/document_scanner_service.dart';
 import '../services/download_service.dart';
 
@@ -238,6 +239,13 @@ class LegalRepository {
     return _addFile(caseId, categoryName,
         name: fileName, size: '${(text.length / 1024).toStringAsFixed(1)} KB');
   }
+
+  /// Files a DOCX-to-PDF conversion under [categoryName] (or the uncategorized
+  /// bucket), keeping the on-disk path so the converted PDF can be reopened.
+  Future<List<Case>> savePdfConversion(
+          int caseId, String? categoryName, ConvertedPdf doc) =>
+      _addFile(caseId, categoryName,
+          name: doc.fileName, size: doc.sizeLabel, path: doc.path);
 
   /// Files a new [CaseFile] (built with a fresh id and a "Just now" date) under
   /// [categoryName]. The single place every "add a file to a case" path funnels

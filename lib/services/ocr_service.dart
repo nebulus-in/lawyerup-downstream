@@ -6,16 +6,14 @@ class OcrService {
   final ImagePicker _picker = ImagePicker();
 
   Future<String?> pickAndRecognizeText() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    final image = await _picker.pickImage(source: ImageSource.gallery);
     if (image == null) return null;
 
     final inputImage = InputImage.fromFilePath(image.path);
-    final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+    final recognizedText = await _textRecognizer.processImage(inputImage);
 
-    String text = recognizedText.text;
-    
-    // Cleanup if needed, though ML Kit usually does a good job
-    return text.isEmpty ? "No text found in the image." : text;
+    final text = recognizedText.text;
+    return text.isEmpty ? 'No text found in the image.' : text;
   }
 
   void dispose() {

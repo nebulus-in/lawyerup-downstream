@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
 import '../../../repositories/legal_repository.dart';
+import '../../../services/docx_to_pdf_service.dart';
 import '../../../services/document_scanner_service.dart';
 import '../../../services/download_service.dart';
 
@@ -27,6 +28,7 @@ class FileBloc extends Bloc<FileEvent, FileState> {
     on<DocumentScanned>(_onDocumentScanned, transformer: droppable());
     on<FileDownloaded>(_onFileDownloaded, transformer: droppable());
     on<OcrTextSaved>(_onOcrTextSaved, transformer: droppable());
+    on<PdfConversionSaved>(_onPdfConversionSaved, transformer: droppable());
     on<FileRenamed>(_onFileRenamed, transformer: droppable());
     on<FileDeleted>(_onFileDeleted, transformer: droppable());
     on<FilesDeleted>(_onFilesDeleted, transformer: droppable());
@@ -78,6 +80,13 @@ class FileBloc extends Bloc<FileEvent, FileState> {
                 text: event.text,
                 fileName: event.fileName,
               ));
+
+  Future<void> _onPdfConversionSaved(PdfConversionSaved event, Emitter<FileState> emit) =>
+      _runMutation(
+          emit,
+          'Could not save PDF conversion. Please try again.',
+          () => _repository.savePdfConversion(
+              event.caseId, event.categoryName, event.document));
 
   Future<void> _onFileRenamed(FileRenamed event, Emitter<FileState> emit) =>
       _runMutation(

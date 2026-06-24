@@ -62,6 +62,17 @@ class OcrTextSaved extends FileEvent {
   List<Object?> get props => [caseId, categoryName, text, fileName];
 }
 
+class PdfConversionSaved extends FileEvent {
+  final int caseId;
+  final String? categoryName;
+  final ConvertedPdf document;
+
+  const PdfConversionSaved(this.caseId, this.categoryName, this.document);
+
+  @override
+  List<Object?> get props => [caseId, categoryName, document];
+}
+
 class FileRenamed extends FileEvent {
   final int caseId;
   final int fileId;

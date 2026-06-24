@@ -1,0 +1,11 @@
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                if (compileSdk != null && compileSdk < 36) {
+                    compileSdk = 36
+                }
+            }
+        }
+    }
+}

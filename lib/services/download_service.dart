@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import 'document_scanner_service.dart' show fileTimestamp, formatFileSize;
+import 'document_scanner_service.dart'
+    show fileTimestamp, formatFileSize, uniqueFilePath;
 
 /// A file fetched from the web and saved into the app's documents directory.
 class DownloadedFile {
@@ -144,7 +145,7 @@ class DownloadService {
       }
 
       final name = _resolveName(uri, response, fallbackName);
-      final target = File(_uniquePath(downloadsDir.path, name));
+      final target = File(uniqueFilePath(downloadsDir.path, name));
 
       final total = response.contentLength >= 0 ? response.contentLength : null;
       var received = 0;
@@ -276,17 +277,5 @@ class DownloadService {
     final cleaned =
         name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
     return cleaned.isEmpty ? 'Download_${fileTimestamp()}' : cleaned;
-  }
-
-  String _uniquePath(String dir, String name) {
-    if (!File('$dir/$name').existsSync()) return '$dir/$name';
-    final dot = name.lastIndexOf('.');
-    final base = dot < 0 ? name : name.substring(0, dot);
-    final ext = dot < 0 ? '' : name.substring(dot);
-    var i = 1;
-    while (File('$dir/${base}_$i$ext').existsSync()) {
-      i++;
-    }
-    return '$dir/${base}_$i$ext';
   }
 }

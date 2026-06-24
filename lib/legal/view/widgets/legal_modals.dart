@@ -8,7 +8,8 @@ import '../../../models/legal_models.dart';
 import '../../../services/document_scanner_service.dart';
 import '../../../services/download_service.dart';
 import '../../../services/ocr_service.dart';
-
+import '../../../services/docx_to_pdf_service.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 class LegalModals {
   static void showCasePicker(
     BuildContext context,
@@ -116,6 +117,26 @@ class LegalModals {
     );
   }
 
+  static void showDocxToPdfModal(BuildContext context, Uint8List docxBytes, String filename) {
+    showModalBottomSheet<ConvertedPdf>(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => _DocxToPdfModalContent(
+        docxBytes: docxBytes,
+        filename: filename,
+      ),
+    ).then((converted) {
+      // The preview sheet pops with the rendered PDF once it's been written to
+      // disk; route it into a case using the host context, which outlives the
+      // dismissed sheet.
+      if (converted != null && context.mounted) {
+        _pickCaseAndFolderForPdf(context, converted);
+      }
+    });
+  }
+
   static void showSearch(BuildContext context, CaseState state) {
     showModalBottomSheet(
       context: context,
@@ -176,8 +197,20 @@ class LegalModals {
     );
   }
 
-  static void showAddCategoryModal(BuildContext context, int caseId) {
-    final controller = TextEditingController();
+  /// Bottom sheet with a single labelled text field and a primary button —
+  /// shared scaffolding for the add/rename flows. [onSubmit] receives the
+  /// entered text, after which the sheet closes and [successMessage] is shown.
+  static void _singleInputSheet(
+    BuildContext context, {
+    required String title,
+    required String fieldLabel,
+    required String hint,
+    String? initialValue,
+    required String buttonLabel,
+    required void Function(String value) onSubmit,
+    required String successMessage,
+  }) {
+    final controller = TextEditingController(text: initialValue);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -191,18 +224,17 @@ class LegalModals {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Add Category',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
-              _buildInput('CATEGORY NAME', 'e.g. Discovery Documents', controller),
+              _buildInput(fieldLabel, hint, controller),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () {
-                  context
-                      .read<CategoryBloc>()
-                      .add(CategoryAdded(caseId, controller.text));
+                  onSubmit(controller.text);
                   Navigator.pop(modalContext);
-                  snack(context, 'Folder created');
+                  snack(context, successMessage);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: LegalTheme.blue,
@@ -210,104 +242,56 @@ class LegalModals {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Text('Save Category',
-                    style: TextStyle(
+                child: Text(buttonLabel,
+                    style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  static void showAddCategoryModal(BuildContext context, int caseId) {
+    _singleInputSheet(
+      context,
+      title: 'Add Category',
+      fieldLabel: 'CATEGORY NAME',
+      hint: 'e.g. Discovery Documents',
+      buttonLabel: 'Save Category',
+      onSubmit: (value) =>
+          context.read<CategoryBloc>().add(CategoryAdded(caseId, value)),
+      successMessage: 'Folder created',
     );
   }
 
   static void showRenameCategoryModal(BuildContext context, int caseId, Category cat) {
-    final controller = TextEditingController(text: cat.name);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(modalContext).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: LegalTheme.sheetDecoration,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Rename Folder',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-              _buildInput('FOLDER NAME', 'e.g. Evidence', controller),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  context
-                      .read<CategoryBloc>()
-                      .add(CategoryRenamed(caseId, cat.id, controller.text));
-                  Navigator.pop(modalContext);
-                  snack(context, 'Folder renamed');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: LegalTheme.blue,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Save Changes',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ),
+    _singleInputSheet(
+      context,
+      title: 'Rename Folder',
+      fieldLabel: 'FOLDER NAME',
+      hint: 'e.g. Evidence',
+      initialValue: cat.name,
+      buttonLabel: 'Save Changes',
+      onSubmit: (value) => context
+          .read<CategoryBloc>()
+          .add(CategoryRenamed(caseId, cat.id, value)),
+      successMessage: 'Folder renamed',
     );
   }
 
   static void showRenameFileModal(BuildContext context, int caseId, CaseFile file) {
-    final controller = TextEditingController(text: file.name);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(modalContext).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: LegalTheme.sheetDecoration,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Rename Document',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-              _buildInput('DOCUMENT NAME', 'e.g. Witness_Statement.pdf', controller),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  context
-                      .read<FileBloc>()
-                      .add(FileRenamed(caseId, file.id, controller.text));
-                  Navigator.pop(modalContext);
-                  snack(context, 'Document renamed');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: LegalTheme.blue,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Save Changes',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ),
+    _singleInputSheet(
+      context,
+      title: 'Rename Document',
+      fieldLabel: 'DOCUMENT NAME',
+      hint: 'e.g. Witness_Statement.pdf',
+      initialValue: file.name,
+      buttonLabel: 'Save Changes',
+      onSubmit: (value) =>
+          context.read<FileBloc>().add(FileRenamed(caseId, file.id, value)),
+      successMessage: 'Document renamed',
     );
   }
 
@@ -472,16 +456,17 @@ class LegalModals {
     final cases = context.read<CaseBloc>().state.cases;
     final c = cases.firstWhere((c) => c.id == caseId);
     final count = fileIds.length;
-    final noun = count == 1 ? 'Document' : '$count documents';
+    final phrase = count == 1 ? 'document' : '$count documents';
 
     showFolderPicker(
       context,
       c,
-      title: 'Move ${count == 1 ? 'document' : '$count documents'}',
+      title: 'Move $phrase',
       subtitle: 'Select a destination folder in ${c.name}',
       onPick: (categoryName) {
         context.read<FileBloc>().add(FilesMoved(caseId, fileIds, categoryName));
-        snack(context, '$noun moved to ${categoryName ?? 'General'}');
+        snack(context,
+            '${count == 1 ? 'Document' : phrase} moved to ${categoryName ?? 'General'}');
       },
     );
   }
@@ -720,6 +705,38 @@ class LegalModals {
                   : 'OCR_Result_$categoryName.txt',
             ));
         snack(context, 'Text saved to ${isGeneral ? c.name : categoryName}');
+      },
+    );
+  }
+
+  static void _pickCaseAndFolderForPdf(BuildContext context, ConvertedPdf doc) {
+    final caseState = context.read<CaseBloc>().state;
+    showCasePicker(
+      context,
+      caseState,
+      title: 'Save PDF conversion',
+      subtitle: 'Select a case to save this document',
+      onPick: (c) {
+        if (c.categories.isEmpty) {
+          context.read<FileBloc>().add(PdfConversionSaved(c.id, null, doc));
+          snack(context, 'PDF saved to ${c.name}');
+        } else {
+          _pickFolderForPdf(context, c, doc);
+        }
+      },
+    );
+  }
+
+  static void _pickFolderForPdf(BuildContext context, Case c, ConvertedPdf doc) {
+    showFolderPicker(
+      context,
+      c,
+      title: 'Select Folder',
+      subtitle: 'Save to ${c.name}',
+      onPick: (categoryName) {
+        final isGeneral = categoryName == null;
+        context.read<FileBloc>().add(PdfConversionSaved(c.id, categoryName, doc));
+        snack(context, 'PDF saved to ${isGeneral ? c.name : categoryName}');
       },
     );
   }
@@ -2134,6 +2151,229 @@ class _CaseTypeSelector extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _DocxToPdfModalContent extends StatefulWidget {
+  final Uint8List docxBytes;
+  final String filename;
+
+  const _DocxToPdfModalContent({
+    required this.docxBytes,
+    required this.filename,
+  });
+
+  @override
+  State<_DocxToPdfModalContent> createState() => _DocxToPdfModalContentState();
+}
+
+class _DocxToPdfModalContentState extends State<_DocxToPdfModalContent> {
+  InAppWebViewController? _webViewController;
+  bool _isConverting = true;
+  bool _isSaving = false;
+
+  /// The converted document body, captured straight from the JS bridge once
+  /// mammoth finishes — see [_DocxToPdfModalContentState] and the
+  /// `onConversionComplete` handler. Held here so saving never has to read it
+  /// back out of the WebView.
+  String _convertedHtml = '';
+
+  /// The preview document: the bundled mammoth.js inlined alongside the DOCX
+  /// bytes. Built once when the asset loads (rather than on every rebuild,
+  /// which would re-base64-encode the whole DOCX) and fed to the WebView's
+  /// [InAppWebViewInitialData], so conversion has no network dependency.
+  String? _html;
+
+  @override
+  void initState() {
+    super.initState();
+    DocxToPdfService.loadMammothJs().then((js) {
+      if (mounted) {
+        setState(() => _html =
+            DocxToPdfService.generateHtml(widget.docxBytes, mammothJs: js));
+      }
+    }).catchError((Object e) {
+      debugPrint('DOCX→PDF: failed to load mammoth.js asset: $e');
+      if (mounted) {
+        setState(() => _isConverting = false);
+        LegalModals.snack(context, 'Could not load the document converter.');
+      }
+    });
+  }
+
+  /// Renders the already-converted document body (captured into [_convertedHtml]
+  /// when mammoth finished) to a real PDF on disk, and pops the sheet with the
+  /// resulting [ConvertedPdf] so the host can file it into a case.
+  Future<void> _onSave() async {
+    final controller = _webViewController;
+    if (controller == null || _isSaving) return;
+    setState(() => _isSaving = true);
+    final navigator = Navigator.of(context);
+    try {
+      var contentHtml = _convertedHtml;
+      if (contentHtml.trim().isEmpty) {
+        // Fallback for the rare case the bridge delivered nothing: pull the
+        // rendered body back out of the preview.
+        final raw = await controller.evaluateJavascript(
+            source: "document.getElementById('content').innerHTML");
+        contentHtml = raw?.toString() ?? '';
+      }
+      if (contentHtml.trim().isEmpty) {
+        throw Exception('No converted content to save.');
+      }
+      final converted = await DocxToPdfService.generateAndSave(
+        contentHtml: contentHtml,
+        originalName: widget.filename,
+      );
+      if (!mounted) return;
+      navigator.pop(converted);
+    } catch (e, st) {
+      debugPrint('DOCX→PDF save failed: $e\n$st');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      LegalModals.snack(
+          context, 'Could not convert the document to PDF: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      decoration: LegalTheme.sheetDecoration,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LegalModals.grabber(),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(widget.filename,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              if (!_isConverting)
+                IconButton(
+                  onPressed: () async {
+                    if (_webViewController != null) {
+                      await _webViewController!.printCurrentPage();
+                    }
+                  },
+                  icon: const Icon(Icons.print_rounded, color: LegalTheme.blue),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text('Previewing as PDF',
+              style: TextStyle(
+                  fontSize: 12.5,
+                  color: LegalTheme.muted,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: LegalTheme.page),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _html == null
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: LegalTheme.blue, strokeWidth: 2))
+                  : InAppWebView(
+                      initialData: InAppWebViewInitialData(data: _html!),
+                      initialSettings: InAppWebViewSettings(
+                        javaScriptEnabled: true,
+                        transparentBackground: true,
+                      ),
+                      onConsoleMessage: (controller, msg) {
+                        debugPrint('DOCX→PDF webview: ${msg.message}');
+                      },
+                      onWebViewCreated: (controller) {
+                        _webViewController = controller;
+                        controller.addJavaScriptHandler(
+                          handlerName: 'onConversionComplete',
+                          callback: (args) {
+                            if (!mounted) return;
+                            setState(() {
+                              _isConverting = false;
+                              if (args.isNotEmpty && args.first is String) {
+                                _convertedHtml = args.first as String;
+                              }
+                            });
+                          },
+                        );
+                        controller.addJavaScriptHandler(
+                          handlerName: 'onConversionError',
+                          callback: (args) {
+                            final detail =
+                                args.isNotEmpty ? '${args.first}' : 'unknown';
+                            debugPrint('DOCX→PDF conversion error: $detail');
+                            if (!mounted) return;
+                            setState(() => _isConverting = false);
+                            LegalModals.snack(context,
+                                'Could not convert the document: $detail');
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 50),
+                    side: const BorderSide(color: LegalTheme.page),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Cancel',
+                      style: TextStyle(
+                          color: LegalTheme.ink,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: (_isConverting || _isSaving) ? null : _onSave,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LegalTheme.blue,
+                    disabledBackgroundColor: LegalTheme.blue.withValues(alpha: 0.5),
+                    minimumSize: const Size(0, 50),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white)),
+                        )
+                      : const Text('Save to Case',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import '../../../services/document_scanner_service.dart';
+import '../../../services/docx_to_pdf_service.dart';
 import 'legal_modals.dart';
 
 class HomeView extends StatelessWidget {
@@ -191,7 +194,21 @@ class _QuickActions extends StatelessWidget {
         _ActionChip(
           icon: Icons.picture_as_pdf,
           label: 'To PDF',
-          onTap: () {},
+          onTap: () async {
+            final result = await DocxToPdfService.pickDocx();
+            if (result == null || result.files.isEmpty) return;
+            final file = result.files.first;
+            final bytes = file.bytes ??
+                (file.path != null
+                    ? await File(file.path!).readAsBytes()
+                    : null);
+            if (!context.mounted) return;
+            if (bytes != null) {
+              LegalModals.showDocxToPdfModal(context, bytes, file.name);
+            } else {
+              LegalModals.snack(context, 'Could not read document.');
+            }
+          },
         ),
         const SizedBox(width: 9),
         _ActionChip(

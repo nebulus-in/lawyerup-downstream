@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.unsettled"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = maxOf(flutter.compileSdkVersion as? Int ?: 36, 36)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
