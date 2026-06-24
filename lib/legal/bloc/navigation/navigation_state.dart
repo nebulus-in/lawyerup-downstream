@@ -21,6 +21,10 @@ class NavigationState extends Equatable {
   /// upon (e.g. while an options modal is open). Used to show a selection border.
   final int? longPressedId;
 
+  /// A CNR to auto-load when the eCourts screen opens. Consumed once by
+  /// [ECourtsView] and then cleared via [PendingCnrSet(null)].
+  final String? pendingCnr;
+
   const NavigationState({
     this.activeTab = 'documents',
     this.previousTab = 'documents',
@@ -29,6 +33,7 @@ class NavigationState extends Equatable {
     this.selectedDate,
     this.selectedSource,
     this.longPressedId,
+    this.pendingCnr,
   });
 
   @override
@@ -40,6 +45,7 @@ class NavigationState extends Equatable {
         selectedDate,
         selectedSource,
         longPressedId,
+        pendingCnr,
       ];
 
   NavigationState copyWith({
@@ -50,6 +56,7 @@ class NavigationState extends Equatable {
     Object? selectedDate = _undefined,
     Object? selectedSource = _undefined,
     Object? longPressedId = _undefined,
+    Object? pendingCnr = _undefined,
   }) {
     return NavigationState(
       activeTab: activeTab ?? this.activeTab,
@@ -69,6 +76,9 @@ class NavigationState extends Equatable {
       longPressedId: identical(longPressedId, _undefined)
           ? this.longPressedId
           : longPressedId as int?,
+      pendingCnr: identical(pendingCnr, _undefined)
+          ? this.pendingCnr
+          : pendingCnr as String?,
     );
   }
 }

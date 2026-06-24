@@ -14,6 +14,7 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
     on<CategorySelected>(_onCategorySelected);
     on<DateSelected>(_onDateSelected);
     on<LongPressedIdChanged>(_onLongPressedIdChanged);
+    on<PendingCnrSet>(_onPendingCnrSet);
   }
 
   void _onTabChanged(TabChanged event, Emitter<NavigationState> emit) {
@@ -56,5 +57,9 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
   void _onLongPressedIdChanged(
       LongPressedIdChanged event, Emitter<NavigationState> emit) {
     emit(state.copyWith(longPressedId: event.id));
+  }
+
+  void _onPendingCnrSet(PendingCnrSet event, Emitter<NavigationState> emit) {
+    emit(state.copyWith(pendingCnr: event.cnr));
   }
 }

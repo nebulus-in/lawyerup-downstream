@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/blocs.dart';
+import 'ecourts_view.dart';
 
 /// A legal research destination the user can open in the in-app browser.
 class ResearchSource {
@@ -94,12 +95,128 @@ class ResearchView extends StatelessWidget {
       key: const ValueKey('research'),
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       children: [
+        const Text('Live case status',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: LegalTheme.ink)),
+        const SizedBox(height: 14),
+        const _ECourtsCard(),
+        const SizedBox(height: 24),
         const Text('Legal databases',
             style: TextStyle(
                 fontSize: 18, fontWeight: FontWeight.w700, color: LegalTheme.ink)),
         const SizedBox(height: 18),
         ...kResearchSources.map((s) => _SourceCard(source: s)),
       ],
+    );
+  }
+}
+
+/// The entry point to the native eCourts Case Status screen. Rendered as a dark
+/// "official record" card so it reads as the one live data source on the shelf,
+/// previewing the monospace CNR signature of the screen it opens.
+class _ECourtsCard extends StatelessWidget {
+  const _ECourtsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context
+          .read<NavigationBloc>()
+          .add(const SourceSelected(ECourtsView.sourceId)),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+        decoration: BoxDecoration(
+          color: LegalTheme.ink,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: LegalTheme.ink.withValues(alpha: 0.26),
+                blurRadius: 22,
+                offset: const Offset(0, 10)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(11)),
+                  child: const Text('eC',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800)),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('eCourts Case Status',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700)),
+                      SizedBox(height: 2),
+                      Text('Track any case by its CNR',
+                          style: TextStyle(
+                              color: Color(0xFF8A94A6),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF1A8A4A).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: const Text('● Live',
+                      style: TextStyle(
+                          color: Color(0xFF49C57E),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Row(
+                children: [
+                  Text('MHAU01·990011·2024',
+                      style: TextStyle(
+                          fontFamily: 'monospace',
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1)),
+                  Spacer(),
+                  Text('Look up',
+                      style: TextStyle(
+                          color: Color(0xFF5E9BF0),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700)),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_rounded,
+                      size: 15, color: Color(0xFF5E9BF0)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -48,3 +48,11 @@ class LongPressedIdChanged extends NavigationEvent {
   @override
   List<Object?> get props => [id];
 }
+
+/// Sets (or clears) the CNR to auto-load when the eCourts screen opens.
+class PendingCnrSet extends NavigationEvent {
+  final String? cnr;
+  const PendingCnrSet(this.cnr);
+  @override
+  List<Object?> get props => [cnr];
+}

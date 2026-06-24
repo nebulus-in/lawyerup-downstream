@@ -23,6 +23,8 @@ class CaseCreated extends CaseEvent {
   final String court;
   final String type;
   final List<String> folders;
+  final String? cnr;
+  final String? hearing;
 
   const CaseCreated({
     required this.name,
@@ -30,10 +32,12 @@ class CaseCreated extends CaseEvent {
     required this.court,
     required this.type,
     required this.folders,
+    this.cnr,
+    this.hearing,
   });
 
   @override
-  List<Object?> get props => [name, number, court, type, folders];
+  List<Object?> get props => [name, number, court, type, folders, cnr, hearing];
 }
 
 class CaseUpdated extends CaseEvent {

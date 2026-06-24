@@ -75,6 +75,8 @@ class CaseBloc extends Bloc<CaseEvent, CaseState> {
                 court: event.court,
                 type: event.type,
                 folders: event.folders,
+                cnr: event.cnr,
+                hearing: event.hearing,
               ));
 
   Future<void> _onCaseUpdated(CaseUpdated event, Emitter<CaseState> emit) =>

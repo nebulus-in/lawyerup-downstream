@@ -85,6 +85,11 @@ class Case extends Equatable {
   final String court;
   final String type;
 
+  /// The 16-character CNR if this case was imported from eCourts, or null for
+  /// manually created cases. Used to surface the "View on eCourts" card in the
+  /// case detail view.
+  final String? cnr;
+
   final int docs;
   final String hearing;
   final List<CaseFile> uncategorizedFiles;
@@ -96,7 +101,7 @@ class Case extends Equatable {
     required this.number,
     required this.court,
     required this.type,
-
+    this.cnr,
     required this.docs,
     required this.hearing,
     this.uncategorizedFiles = const [],
@@ -164,7 +169,7 @@ class Case extends Equatable {
         number,
         court,
         type,
-
+        cnr,
         docs,
         hearing,
         uncategorizedFiles,
@@ -176,7 +181,7 @@ class Case extends Equatable {
     String? number,
     String? court,
     String? type,
-
+    Object? cnr = _undefined,
     String? hearing,
     List<Category>? categories,
     List<CaseFile>? uncategorizedFiles,
@@ -188,13 +193,15 @@ class Case extends Equatable {
       number: number ?? this.number,
       court: court ?? this.court,
       type: type ?? this.type,
-
+      cnr: identical(cnr, _undefined) ? this.cnr : cnr as String?,
       docs: docs ?? this.docs,
       hearing: hearing ?? this.hearing,
       uncategorizedFiles: uncategorizedFiles ?? this.uncategorizedFiles,
       categories: categories ?? this.categories,
     );
   }
+
+  static const Object _undefined = Object();
 
   /// Every file in this case, across the uncategorized bucket and all categories.
   Iterable<CaseFile> get allFiles sync* {

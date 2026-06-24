@@ -4,8 +4,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../legal_theme.dart';
 import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
+import '../../../services/ecourts/ecourts_api.dart';
 import 'shared_widgets.dart';
 import 'legal_modals.dart';
+import 'ecourts_view.dart';
 
 class CaseDetailView extends StatelessWidget {
   const CaseDetailView({super.key});
@@ -69,7 +71,12 @@ class CaseDetailView extends StatelessWidget {
                 children: [
                   if (!isMultiSelect) ...[
                     _CaseOverviewCard(c: selectedCase),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 12),
+                    if (selectedCase.cnr != null) ...[
+                      _ECourtsStatusCard(c: selectedCase),
+                      const SizedBox(height: 22),
+                    ] else
+                      const SizedBox(height: 10),
                   ],
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -203,6 +210,87 @@ class _CaseOverviewCard extends StatelessWidget {
           _FactRow(label: 'CASE NO.', value: c.number),
           const SizedBox(height: 6),
         ],
+      ),
+    );
+  }
+}
+
+/// A tappable card shown only for cases imported from eCourts (i.e. those with
+/// a CNR). Opens the eCourts Case Status screen pre-loaded with that CNR.
+class _ECourtsStatusCard extends StatelessWidget {
+  final Case c;
+  const _ECourtsStatusCard({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final cnr = c.cnr!;
+    // Format as XXXX · XXXXXX · XXXX for readability
+    final formatted = Cnr.format(cnr);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        final nav = context.read<NavigationBloc>();
+        nav.add(PendingCnrSet(cnr));
+        nav.add(const CaseSelected(null));
+        nav.add(const TabChanged('research'));
+        nav.add(const SourceSelected(ECourtsView.sourceId));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: LegalTheme.ink,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: LegalTheme.ink.withValues(alpha: 0.20),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Text('eC',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('View Case Status',
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                  const SizedBox(height: 2),
+                  Text(formatted,
+                      style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1,
+                          color: Color(0xFF8A94A6))),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_rounded,
+                color: Color(0xFF8A94A6), size: 18),
+          ],
+        ),
       ),
     );
   }

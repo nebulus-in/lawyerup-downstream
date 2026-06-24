@@ -137,6 +137,8 @@ class LegalRepository {
     required String court,
     required String type,
     required List<String> folders,
+    String? cnr,
+    String? hearing,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -155,9 +157,9 @@ class LegalRepository {
       number: number.isEmpty ? 'Pending' : number,
       court: court.isEmpty ? 'TBD' : court,
       type: type,
-
+      cnr: cnr,
       docs: 0,
-      hearing: '-',
+      hearing: hearing ?? '-',
       categories: categories,
     );
 

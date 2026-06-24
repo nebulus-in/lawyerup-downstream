@@ -11,6 +11,7 @@ import 'widgets/calendar_view.dart';
 import 'widgets/profile_view.dart';
 import 'widgets/research_view.dart';
 import 'widgets/research_webview.dart';
+import 'widgets/ecourts_view.dart';
 import 'widgets/legal_drawer.dart';
 import 'widgets/legal_modals.dart';
 
@@ -291,6 +292,9 @@ class _MainContent extends StatelessWidget {
     }
     if (activeTab == 'calendar') return const CalendarView();
     if (activeTab == 'research') {
+      // eCourts is a native screen rather than a webview source, reached through
+      // the same selectedSource slot the in-app browser uses.
+      if (selectedSource == ECourtsView.sourceId) return const ECourtsView();
       final source = researchSourceById(selectedSource);
       if (source != null) return ResearchWebView(source: source);
       return const ResearchView();
