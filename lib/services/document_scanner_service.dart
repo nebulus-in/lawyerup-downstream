@@ -90,7 +90,7 @@ class DocumentScannerService {
       await scansDir.create(recursive: true);
     }
 
-    final fileName = 'Scan_${_timestamp()}.pdf';
+    final fileName = 'Scan_${fileTimestamp()}.pdf';
     final saved = await source.copy('${scansDir.path}/$fileName');
 
     return ScannedDocument(
@@ -108,13 +108,15 @@ class DocumentScannerService {
     if (parsed != null && parsed.isScheme('file')) return parsed.toFilePath();
     return uri;
   }
+}
 
-  String _timestamp() {
-    final now = DateTime.now();
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${now.year}${two(now.month)}${two(now.day)}_'
-        '${two(now.hour)}${two(now.minute)}${two(now.second)}';
-  }
+/// A compact, filesystem-safe timestamp (`YYYYMMDD_HHMMSS`) for building unique
+/// file names for documents saved to disk.
+String fileTimestamp() {
+  final now = DateTime.now();
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${now.year}${two(now.month)}${two(now.day)}_'
+      '${two(now.hour)}${two(now.minute)}${two(now.second)}';
 }
 
 /// Formats a byte count the way the rest of the app shows file sizes.

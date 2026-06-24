@@ -34,6 +34,17 @@ class DocumentScanned extends FileEvent {
   List<Object?> get props => [caseId, categoryName, document];
 }
 
+class FileDownloaded extends FileEvent {
+  final int caseId;
+  final String? categoryName;
+  final DownloadedFile document;
+
+  const FileDownloaded(this.caseId, this.categoryName, this.document);
+
+  @override
+  List<Object?> get props => [caseId, categoryName, document];
+}
+
 class OcrTextSaved extends FileEvent {
   final int caseId;
   final String? categoryName;

@@ -13,6 +13,10 @@ class NavigationState extends Equatable {
   final int? selectedCategoryId;
   final DateTime? selectedDate;
 
+  /// The id of the research source currently open in the in-app browser, or
+  /// null when the sources list is showing.
+  final String? selectedSource;
+
   /// The ID of the item (Case, Category, or CaseFile) currently being acted
   /// upon (e.g. while an options modal is open). Used to show a selection border.
   final int? longPressedId;
@@ -23,6 +27,7 @@ class NavigationState extends Equatable {
     this.selectedCaseId,
     this.selectedCategoryId,
     this.selectedDate,
+    this.selectedSource,
     this.longPressedId,
   });
 
@@ -33,6 +38,7 @@ class NavigationState extends Equatable {
         selectedCaseId,
         selectedCategoryId,
         selectedDate,
+        selectedSource,
         longPressedId,
       ];
 
@@ -42,6 +48,7 @@ class NavigationState extends Equatable {
     Object? selectedCaseId = _undefined,
     Object? selectedCategoryId = _undefined,
     Object? selectedDate = _undefined,
+    Object? selectedSource = _undefined,
     Object? longPressedId = _undefined,
   }) {
     return NavigationState(
@@ -56,6 +63,9 @@ class NavigationState extends Equatable {
       selectedDate: identical(selectedDate, _undefined)
           ? this.selectedDate
           : selectedDate as DateTime?,
+      selectedSource: identical(selectedSource, _undefined)
+          ? this.selectedSource
+          : selectedSource as String?,
       longPressedId: identical(longPressedId, _undefined)
           ? this.longPressedId
           : longPressedId as int?,

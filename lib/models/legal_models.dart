@@ -41,6 +41,11 @@ class CaseFile extends Equatable {
 }
 
 class Category extends Equatable {
+  /// Sentinel category name meaning "no real folder" — files filed under this
+  /// name (or a null name) live in the case's [Case.uncategorizedFiles] bucket.
+  /// Kept separate from any user-facing label so display text can change freely.
+  static const uncategorized = 'Uncategorized';
+
   final int id;
   final String name;
   final int docs;
@@ -214,7 +219,7 @@ class Case extends Equatable {
   /// Returns a copy with [file] filed under [categoryName], or in the
   /// uncategorized bucket when no real category is named. Increments doc counts.
   Case addFile(CaseFile file, {String? categoryName}) {
-    if (categoryName != null && categoryName != 'Uncategorized') {
+    if (categoryName != null && categoryName != Category.uncategorized) {
       final updatedCategories = categories
           .map((cat) => cat.name == categoryName ? cat.addFile(file) : cat)
           .toList();
@@ -223,6 +228,93 @@ class Case extends Equatable {
     return copyWith(
       uncategorizedFiles: [...uncategorizedFiles, file],
       docs: docs + 1,
+    );
+  }
+
+  /// Returns a copy with the file matching [id] renamed to [name], wherever it
+  /// lives in the case.
+  Case renameFile(int id, String name) {
+    CaseFile rename(CaseFile f) => f.id == id ? f.copyWith(name: name) : f;
+    return copyWith(
+      uncategorizedFiles: uncategorizedFiles.map(rename).toList(),
+      categories: categories
+          .map((cat) => cat.copyWith(files: cat.files.map(rename).toList()))
+          .toList(),
+    );
+  }
+
+  /// Returns a copy with the files matching [ids] removed everywhere, with the
+  /// per-folder and case-level doc counts recomputed from the survivors.
+  Case removeFiles(Set<int> ids) {
+    final uncategorized =
+        uncategorizedFiles.where((f) => !ids.contains(f.id)).toList();
+    final updatedCategories = categories.map((cat) {
+      final files = cat.files.where((f) => !ids.contains(f.id)).toList();
+      return cat.copyWith(files: files, docs: files.length);
+    }).toList();
+    final total = uncategorized.length +
+        updatedCategories.fold<int>(0, (n, cat) => n + cat.files.length);
+    return copyWith(
+      uncategorizedFiles: uncategorized,
+      categories: updatedCategories,
+      docs: total,
+    );
+  }
+
+  /// Returns a copy with the files matching [ids] moved into [categoryName] (or
+  /// the uncategorized bucket when no real category is named). Per-folder doc
+  /// counts stay in sync; the case total is unchanged.
+  Case moveFiles(Set<int> ids, String? categoryName) {
+    final moved = <CaseFile>[];
+    List<CaseFile> take(List<CaseFile> files) => files.where((f) {
+          if (ids.contains(f.id)) {
+            moved.add(f);
+            return false;
+          }
+          return true;
+        }).toList();
+
+    final uncategorizedRest = take(uncategorizedFiles);
+    final categoriesRest = categories
+        .map((cat) {
+          final files = take(cat.files);
+          return cat.copyWith(files: files, docs: files.length);
+        })
+        .toList();
+
+    if (moved.isEmpty) return this;
+
+    if (categoryName == null || categoryName == Category.uncategorized) {
+      return copyWith(
+        uncategorizedFiles: [...uncategorizedRest, ...moved],
+        categories: categoriesRest,
+      );
+    }
+    final categoriesNew = categoriesRest.map((cat) {
+      if (cat.name != categoryName) return cat;
+      final files = [...cat.files, ...moved];
+      return cat.copyWith(files: files, docs: files.length);
+    }).toList();
+    return copyWith(
+      uncategorizedFiles: uncategorizedRest,
+      categories: categoriesNew,
+    );
+  }
+
+  /// Returns a copy with the category matching [id] renamed to [name].
+  Case renameCategory(int id, String name) => copyWith(
+        categories: categories
+            .map((cat) => cat.id == id ? cat.copyWith(name: name) : cat)
+            .toList(),
+      );
+
+  /// Returns a copy with the category matching [id] removed; its files fall back
+  /// into the uncategorized bucket.
+  Case removeCategory(int id) {
+    final removed = categories.firstWhere((cat) => cat.id == id);
+    return copyWith(
+      categories: categories.where((cat) => cat.id != id).toList(),
+      uncategorizedFiles: [...uncategorizedFiles, ...removed.files],
     );
   }
 }

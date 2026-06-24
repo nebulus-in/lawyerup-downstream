@@ -10,6 +10,7 @@ import 'widgets/category_detail_view.dart';
 import 'widgets/calendar_view.dart';
 import 'widgets/profile_view.dart';
 import 'widgets/research_view.dart';
+import 'widgets/research_webview.dart';
 import 'widgets/legal_drawer.dart';
 import 'widgets/legal_modals.dart';
 
@@ -23,64 +24,121 @@ class LegalPage extends StatelessWidget {
   }
 }
 
-class LegalView extends StatelessWidget {
+class LegalView extends StatefulWidget {
   const LegalView({super.key});
+
+  @override
+  State<LegalView> createState() => _LegalViewState();
+}
+
+class _LegalViewState extends State<LegalView> {
+  /// Drives the collapse of the bottom nav (and the browser header) when the
+  /// in-app research browser is scrolled.
+  final ValueNotifier<bool> _barsVisible = ValueNotifier(true);
+
+  @override
+  void dispose() {
+    _barsVisible.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
     final selectedCaseId = context.select((NavigationBloc bloc) => bloc.state.selectedCaseId);
     final selectedDate = context.select((NavigationBloc bloc) => bloc.state.selectedDate);
+    final selectedSource = context.select((NavigationBloc bloc) => bloc.state.selectedSource);
 
     final inSubScreen = activeTab == 'cases' && selectedCaseId != null;
-    final showPills = !inSubScreen && activeTab != 'profile';
+    final inResearchSource = activeTab == 'research' && selectedSource != null;
+    final hideChrome = inSubScreen || inResearchSource;
+    final showPills = !hideChrome && activeTab != 'profile';
 
     return MultiBlocListener(
+      // Every mutation BLoC surfaces failures the same way: a transient
+      // errorMessage shown as a snack. One helper keeps the three in lockstep.
       listeners: [
-        BlocListener<CaseBloc, CaseState>(
-          listenWhen: (prev, curr) =>
-              curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
-          listener: (context, state) =>
-              LegalModals.snack(context, state.errorMessage!),
-        ),
-        BlocListener<CategoryBloc, CategoryState>(
-          listenWhen: (prev, curr) =>
-              curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
-          listener: (context, state) =>
-              LegalModals.snack(context, state.errorMessage!),
-        ),
-        BlocListener<FileBloc, FileState>(
-          listenWhen: (prev, curr) =>
-              curr.errorMessage != null && curr.errorMessage != prev.errorMessage,
-          listener: (context, state) =>
-              LegalModals.snack(context, state.errorMessage!),
-        ),
+        _errorListener<CaseBloc, CaseState>((s) => s.errorMessage),
+        _errorListener<CategoryBloc, CategoryState>((s) => s.errorMessage),
+        _errorListener<FileBloc, FileState>((s) => s.errorMessage),
       ],
-      child: Scaffold(
-        backgroundColor: LegalTheme.page,
-        drawer: const LegalDrawer(),
-        body: Stack(
-          children: [
-            SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  if (!inSubScreen) const _Header(),
-                  if (showPills) const _Tabs(),
-                  const Expanded(
-                    child: AnimatedSwitcher(
-                      duration: Duration(milliseconds: 280),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: _MainContent(),
+      child: BarVisibilityScope(
+        visible: _barsVisible,
+        child: Scaffold(
+          backgroundColor: LegalTheme.page,
+          drawer: const LegalDrawer(),
+          body: Stack(
+            children: [
+              SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    if (!hideChrome) const _Header(),
+                    if (showPills) const _Tabs(),
+                    const Expanded(
+                      child: AnimatedSwitcher(
+                        duration: Duration(milliseconds: 280),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: _MainContent(),
+                      ),
                     ),
-                  ),
-                  const _BottomNav(),
-                ],
+                    CollapsibleBar(
+                      visible: _barsVisible,
+                      enabled: inResearchSource,
+                      alignment: Alignment.bottomCenter,
+                      child: const _BottomNav(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (selectedDate != null) const _DateModalOverlay(),
-          ],
+              if (selectedDate != null) const _DateModalOverlay(),
+              const _FileProgressBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A [BlocListener] that snacks the transient [errorMessage] (read via [errorOf])
+/// whenever it appears or changes — the shared error-surfacing wiring for every
+/// mutation BLoC.
+BlocListener<B, S> _errorListener<B extends StateStreamable<S>, S>(
+    String? Function(S) errorOf) {
+  return BlocListener<B, S>(
+    listenWhen: (prev, curr) {
+      final err = errorOf(curr);
+      return err != null && err != errorOf(prev);
+    },
+    listener: (context, state) => LegalModals.snack(context, errorOf(state)!),
+  );
+}
+
+/// A thin progress bar pinned to the top while a file operation is in flight.
+///
+/// Owns its own [FileBloc] subscription so the in-flight toggle rebuilds only
+/// this strip rather than the whole [LegalView] shell. With the in-memory
+/// repository the flag is momentary; it becomes visible once the repository
+/// does real async I/O. Pairs with the droppable transformers in FileBloc.
+class _FileProgressBar extends StatelessWidget {
+  const _FileProgressBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final processing =
+        context.select((FileBloc bloc) => bloc.state.isProcessing);
+    if (!processing) return const SizedBox.shrink();
+    return const Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 3,
+          child: LinearProgressIndicator(minHeight: 3),
         ),
       ),
     );
@@ -223,6 +281,7 @@ class _MainContent extends StatelessWidget {
     final activeTab = context.select((NavigationBloc bloc) => bloc.state.activeTab);
     final selectedCaseId = context.select((NavigationBloc bloc) => bloc.state.selectedCaseId);
     final selectedCategoryId = context.select((NavigationBloc bloc) => bloc.state.selectedCategoryId);
+    final selectedSource = context.select((NavigationBloc bloc) => bloc.state.selectedSource);
 
     if (activeTab == 'documents') return const HomeView();
     if (activeTab == 'cases') {
@@ -231,7 +290,11 @@ class _MainContent extends StatelessWidget {
       return const CategoryDetailView();
     }
     if (activeTab == 'calendar') return const CalendarView();
-    if (activeTab == 'research') return const ResearchView();
+    if (activeTab == 'research') {
+      final source = researchSourceById(selectedSource);
+      if (source != null) return ResearchWebView(source: source);
+      return const ResearchView();
+    }
     return const ProfileView();
   }
 }

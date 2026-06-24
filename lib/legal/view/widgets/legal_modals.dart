@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,6 +6,7 @@ import '../legal_theme.dart';
 import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
 import '../../../services/document_scanner_service.dart';
+import '../../../services/download_service.dart';
 import '../../../services/ocr_service.dart';
 
 class LegalModals {
@@ -201,6 +202,7 @@ class LegalModals {
                       .read<CategoryBloc>()
                       .add(CategoryAdded(caseId, controller.text));
                   Navigator.pop(modalContext);
+                  snack(context, 'Folder created');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: LegalTheme.blue,
@@ -245,6 +247,7 @@ class LegalModals {
                       .read<CategoryBloc>()
                       .add(CategoryRenamed(caseId, cat.id, controller.text));
                   Navigator.pop(modalContext);
+                  snack(context, 'Folder renamed');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: LegalTheme.blue,
@@ -289,6 +292,7 @@ class LegalModals {
                       .read<FileBloc>()
                       .add(FileRenamed(caseId, file.id, controller.text));
                   Navigator.pop(modalContext);
+                  snack(context, 'Document renamed');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: LegalTheme.blue,
@@ -362,6 +366,7 @@ class LegalModals {
               onTap: () {
                 Navigator.pop(modalContext);
                 context.read<FileBloc>().add(FileUploaded(caseId, categoryName));
+                snack(context, 'File uploaded');
               },
             ),
           ],
@@ -467,54 +472,79 @@ class LegalModals {
     final cases = context.read<CaseBloc>().state.cases;
     final c = cases.firstWhere((c) => c.id == caseId);
     final count = fileIds.length;
-    
+    final noun = count == 1 ? 'Document' : '$count documents';
+
+    showFolderPicker(
+      context,
+      c,
+      title: 'Move ${count == 1 ? 'document' : '$count documents'}',
+      subtitle: 'Select a destination folder in ${c.name}',
+      onPick: (categoryName) {
+        context.read<FileBloc>().add(FilesMoved(caseId, fileIds, categoryName));
+        snack(context, '$noun moved to ${categoryName ?? 'General'}');
+      },
+    );
+  }
+
+  /// Bottom sheet listing a case's folders — the uncategorized bucket first,
+  /// then each category — and reports the chosen folder to [onPick]. [onPick]
+  /// receives null for the uncategorized bucket and the category name otherwise.
+  /// The sheet is dismissed before [onPick] runs.
+  static void showFolderPicker(
+    BuildContext context,
+    Case c, {
+    required String title,
+    required String subtitle,
+    required void Function(String? categoryName) onPick,
+  }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (modalContext) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        decoration: LegalTheme.sheetDecoration,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            grabber(),
-            const SizedBox(height: 14),
-            Text('Move ${count == 1 ? 'document' : '$count documents'}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('Select a destination folder in ${c.name}',
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    color: LegalTheme.muted,
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pop(modalContext);
-                      context.read<FileBloc>().add(FilesMoved(caseId, fileIds, null));
-                      snack(context, '${count == 1 ? 'Document' : '$count documents'} moved to General');
-                    },
-                    child: const _FolderPickerItem(name: 'General (Uncategorized)'),
-                  ),
-                  ...c.categories.map((cat) => GestureDetector(
-                        onTap: () {
-                          Navigator.pop(modalContext);
-                          context.read<FileBloc>().add(FilesMoved(caseId, fileIds, cat.name));
-                          snack(context, '${count == 1 ? 'Document' : '$count documents'} moved to ${cat.name}');
-                        },
-                        child: _FolderPickerItem(name: cat.name),
-                      )),
-                ],
+      builder: (modalContext) {
+        void pick(String? categoryName) {
+          Navigator.pop(modalContext);
+          onPick(categoryName);
+        }
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          decoration: LegalTheme.sheetDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              grabber(),
+              const SizedBox(height: 14),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(subtitle,
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      color: LegalTheme.muted,
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    GestureDetector(
+                      onTap: () => pick(null),
+                      child: const _FolderPickerItem(
+                          name: 'General (Uncategorized)'),
+                    ),
+                    ...c.categories.map((cat) => GestureDetector(
+                          onTap: () => pick(cat.name),
+                          child: _FolderPickerItem(name: cat.name),
+                        )),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -674,11 +704,40 @@ class LegalModals {
   }
 
   static void _pickFolderForOcr(BuildContext context, Case c, String text) {
+    showFolderPicker(
+      context,
+      c,
+      title: 'Select Folder',
+      subtitle: 'Save to ${c.name}',
+      onPick: (categoryName) {
+        final isGeneral = categoryName == null;
+        context.read<FileBloc>().add(OcrTextSaved(
+              caseId: c.id,
+              categoryName: categoryName,
+              text: text,
+              fileName: isGeneral
+                  ? 'OCR_Result_${DateTime.now().millisecondsSinceEpoch}.txt'
+                  : 'OCR_Result_$categoryName.txt',
+            ));
+        snack(context, 'Text saved to ${isGeneral ? c.name : categoryName}');
+      },
+    );
+  }
+
+  /// Shown when the in-app browser catches a download. Frames the captured file
+  /// before routing it into a case folder. [download.suggestedName] is a preview
+  /// — the saved name may differ once the server's headers are read.
+  static void showSaveDownloadSheet(
+    BuildContext context,
+    PendingDownload download,
+  ) {
+    final suggestedName = download.suggestedName;
+    final sourceHost = download.sourceHost;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (modalContext) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         decoration: LegalTheme.sheetDecoration,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -686,51 +745,196 @@ class LegalModals {
           children: [
             grabber(),
             const SizedBox(height: 14),
-            const Text('Select Folder',
+            const Text('Save this download',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
-            Text('Save to ${c.name}',
-                style: const TextStyle(
+            const Text('Keep this file with your case documents.',
+                style: TextStyle(
                     fontSize: 12.5,
                     color: LegalTheme.muted,
                     fontWeight: FontWeight.w500)),
             const SizedBox(height: 16),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                  color: LegalTheme.field,
+                  borderRadius: BorderRadius.circular(14)),
+              child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pop(modalContext);
-                      context.read<FileBloc>().add(OcrTextSaved(
-                            caseId: c.id,
-                            text: text,
-                            fileName: 'OCR_Result_${DateTime.now().millisecondsSinceEpoch}.txt',
-                          ));
-                      snack(context, 'Text saved to ${c.name}');
-                    },
-                    child: const _FolderPickerItem(name: 'General (Uncategorized)'),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                        color: LegalTheme.blueBg,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Icon(_fileGlyph(suggestedName),
+                        color: LegalTheme.blue, size: 22),
                   ),
-                  ...c.categories.map((cat) => GestureDetector(
-                        onTap: () {
-                          Navigator.pop(modalContext);
-                          context.read<FileBloc>().add(OcrTextSaved(
-                                caseId: c.id,
-                                categoryName: cat.name,
-                                text: text,
-                                fileName: 'OCR_Result_${cat.name}.txt',
-                              ));
-                          snack(context, 'Text saved to ${cat.name}');
-                        },
-                        child: _FolderPickerItem(name: cat.name),
-                      )),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(suggestedName,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: LegalTheme.ink),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            const Icon(Icons.language_rounded,
+                                size: 12, color: LegalTheme.muted),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text('from $sourceHost',
+                                  style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: LegalTheme.muted),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(modalContext);
+                _pickCaseAndFolderForDownload(context, download);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LegalTheme.blue,
+                elevation: 0,
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Choose case folder',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 4),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(modalContext),
+                child: const Text('Not now',
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: LegalTheme.muted)),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  static void _pickCaseAndFolderForDownload(
+      BuildContext context, PendingDownload download) {
+    final caseState = context.read<CaseBloc>().state;
+    showCasePicker(
+      context,
+      caseState,
+      title: 'Save to a case',
+      subtitle: 'Choose where to file this download',
+      onPick: (c) {
+        if (c.categories.isEmpty) {
+          _runDownload(context,
+              caseId: c.id,
+              categoryName: null,
+              destination: c.name,
+              download: download);
+        } else {
+          _pickFolderForDownload(context, c, download);
+        }
+      },
+    );
+  }
+
+  static void _pickFolderForDownload(
+      BuildContext context, Case c, PendingDownload download) {
+    showFolderPicker(
+      context,
+      c,
+      title: 'Select folder',
+      subtitle: 'Save to ${c.name}',
+      onPick: (categoryName) => _runDownload(context,
+          caseId: c.id,
+          categoryName: categoryName,
+          destination: categoryName ?? c.name,
+          download: download),
+    );
+  }
+
+  /// Fetches the file and files it into the chosen destination, showing a
+  /// progress dialog and a result snack. The dialog and messenger are resolved
+  /// up front because the picker sheets are gone by the time this runs.
+  static Future<void> _runDownload(
+    BuildContext context, {
+    required int caseId,
+    required String? categoryName,
+    required String destination,
+    required PendingDownload download,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final fileBloc = context.read<FileBloc>();
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final progress =
+        ValueNotifier<_DownloadProgress>(const _DownloadProgress(0, null));
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          _DownloadingDialog(destination: destination, progress: progress),
+    );
+
+    try {
+      final file = await DownloadService.instance.download(
+        download.url,
+        headers: download.headers,
+        fallbackName: download.suggestedName,
+        onProgress: (received, total) =>
+            progress.value = _DownloadProgress(received, total),
+      );
+      navigator.pop();
+      fileBloc.add(FileDownloaded(caseId, categoryName, file));
+      _snack(messenger, 'Saved ${file.fileName} to $destination');
+    } on DownloadException catch (e) {
+      navigator.pop();
+      _snack(messenger, e.message);
+    } catch (_) {
+      navigator.pop();
+      _snack(messenger, "Couldn't save the download. Try again.");
+    } finally {
+      progress.dispose();
+    }
+  }
+
+  static IconData _fileGlyph(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+    if (lower.endsWith('.zip') ||
+        lower.endsWith('.rar') ||
+        lower.endsWith('.7z')) {
+      return Icons.folder_zip_rounded;
+    }
+    if (lower.endsWith('.xls') ||
+        lower.endsWith('.xlsx') ||
+        lower.endsWith('.csv')) {
+      return Icons.table_chart_rounded;
+    }
+    return Icons.description_rounded;
   }
 
   static Widget grabber() {
@@ -866,6 +1070,121 @@ class _FolderPickerItem extends StatelessWidget {
           const Spacer(),
           const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18),
         ],
+      ),
+    );
+  }
+}
+
+/// Download progress snapshot. [total] is null until (or unless) the server
+/// reports a content length, which switches the bar to indeterminate.
+class _DownloadProgress {
+  final int received;
+  final int? total;
+  const _DownloadProgress(this.received, this.total);
+
+  /// Completed fraction in [0, 1], or null while the total is unknown — which
+  /// switches the progress bar to indeterminate.
+  double? get fraction =>
+      (total != null && total! > 0) ? (received / total!).clamp(0.0, 1.0) : null;
+
+  /// Caption shown under the bar, with the percentage derived from [fraction]
+  /// so the ratio has a single source of truth.
+  String get label {
+    final f = fraction;
+    if (f != null) {
+      return '${(f * 100).round()}% · '
+          '${formatFileSize(received)} of ${formatFileSize(total!)}';
+    }
+    if (received > 0) return '${formatFileSize(received)} downloaded';
+    return 'Starting…';
+  }
+}
+
+class _DownloadingDialog extends StatelessWidget {
+  final String destination;
+  final ValueListenable<_DownloadProgress> progress;
+
+  const _DownloadingDialog(
+      {required this.destination, required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: SizedBox(
+          width: 280,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: LegalTheme.blueBg,
+                          borderRadius: BorderRadius.circular(11)),
+                      child: const Icon(Icons.download_rounded,
+                          color: LegalTheme.blue, size: 19),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Saving download',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: LegalTheme.ink)),
+                          const SizedBox(height: 2),
+                          Text('Filing into $destination…',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: LegalTheme.muted)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                ValueListenableBuilder<_DownloadProgress>(
+                  valueListenable: progress,
+                  builder: (context, p, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: p.fraction,
+                          minHeight: 6,
+                          backgroundColor: LegalTheme.page,
+                          valueColor:
+                              const AlwaysStoppedAnimation(LegalTheme.blue),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(p.label,
+                          style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: LegalTheme.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

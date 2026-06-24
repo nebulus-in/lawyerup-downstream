@@ -20,6 +20,14 @@ class CaseSelected extends NavigationEvent {
   List<Object?> get props => [caseId];
 }
 
+/// Opens (or, when null, closes) a research source in the in-app browser.
+class SourceSelected extends NavigationEvent {
+  final String? sourceId;
+  const SourceSelected(this.sourceId);
+  @override
+  List<Object?> get props => [sourceId];
+}
+
 class CategorySelected extends NavigationEvent {
   final int? categoryId;
   const CategorySelected(this.categoryId);

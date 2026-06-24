@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../models/legal_models.dart';
 import '../services/document_scanner_service.dart';
+import '../services/download_service.dart';
 
 class LegalRepository {
   /// Broadcasts the current case list after every mutation, making this
@@ -203,171 +204,79 @@ class LegalRepository {
     return _apply(caseId, (c) => c.addCategory(category));
   }
 
-  Future<List<Case>> renameCategory(int caseId, int categoryId, String newName) async {
-    return _apply(caseId, (c) {
-      final categories = c.categories.map((cat) {
-        if (cat.id == categoryId) {
-          return cat.copyWith(name: newName);
-        }
-        return cat;
-      }).toList();
-      return c.copyWith(categories: categories);
-    });
-  }
+  Future<List<Case>> renameCategory(int caseId, int categoryId, String newName) =>
+      _apply(caseId, (c) => c.renameCategory(categoryId, newName));
 
-  Future<List<Case>> deleteCategory(int caseId, int categoryId) async {
-    return _apply(caseId, (c) {
-      final catToDelete = c.categories.firstWhere((cat) => cat.id == categoryId);
-      final categories = c.categories.where((cat) => cat.id != categoryId).toList();
-      final uncategorized = [...c.uncategorizedFiles, ...catToDelete.files];
-      return c.copyWith(
-        categories: categories,
-        uncategorizedFiles: uncategorized,
-      );
-    });
-  }
+  Future<List<Case>> deleteCategory(int caseId, int categoryId) =>
+      _apply(caseId, (c) => c.removeCategory(categoryId));
 
-  Future<List<Case>> uploadFile(int caseId, String? categoryName) async {
-    final file = CaseFile(
-      id: DateTime.now().millisecondsSinceEpoch,
-      name: 'Simulated_Upload.pdf',
-      size: '1.5 MB',
-      date: 'Just now',
-    );
-    return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
+  Future<List<Case>> uploadFile(int caseId, String? categoryName) {
+    return _addFile(caseId, categoryName,
+        name: 'Simulated_Upload.pdf', size: '1.5 MB');
   }
 
   /// Files a scanned PDF under [categoryName] (or the uncategorized bucket),
   /// keeping the on-disk path so the document can be reopened later.
   Future<List<Case>> addScannedDocument(
-      int caseId, String? categoryName, ScannedDocument doc) async {
-    final file = CaseFile(
-      id: DateTime.now().millisecondsSinceEpoch,
-      name: doc.fileName,
-      size: doc.sizeLabel,
-      date: 'Just now',
-      path: doc.path,
-    );
-    return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
-  }
+          int caseId, String? categoryName, ScannedDocument doc) =>
+      _addFile(caseId, categoryName,
+          name: doc.fileName, size: doc.sizeLabel, path: doc.path);
+
+  /// Files a document downloaded from the in-app browser under [categoryName]
+  /// (or the uncategorized bucket), keeping the on-disk path so it can be reopened.
+  Future<List<Case>> addDownloadedFile(
+          int caseId, String? categoryName, DownloadedFile doc) =>
+      _addFile(caseId, categoryName,
+          name: doc.fileName, size: doc.sizeLabel, path: doc.path);
 
   Future<List<Case>> saveOcrText({
     required int caseId,
     String? categoryName,
     required String text,
     required String fileName,
+  }) {
+    return _addFile(caseId, categoryName,
+        name: fileName, size: '${(text.length / 1024).toStringAsFixed(1)} KB');
+  }
+
+  /// Files a new [CaseFile] (built with a fresh id and a "Just now" date) under
+  /// [categoryName]. The single place every "add a file to a case" path funnels
+  /// through, whether the file is uploaded, scanned, downloaded, or OCR text.
+  Future<List<Case>> _addFile(
+    int caseId,
+    String? categoryName, {
+    required String name,
+    required String size,
+    String? path,
   }) async {
     final file = CaseFile(
       id: DateTime.now().millisecondsSinceEpoch,
-      name: fileName,
-      size: '${(text.length / 1024).toStringAsFixed(1)} KB',
+      name: name,
+      size: size,
       date: 'Just now',
+      path: path,
     );
     return _apply(caseId, (c) => c.addFile(file, categoryName: categoryName));
   }
 
-  Future<List<Case>> renameFile(int caseId, int fileId, String newName) async {
-    return _apply(caseId, (c) {
-      final uncategorized = c.uncategorizedFiles.map((f) {
-        return f.id == fileId ? f.copyWith(name: newName) : f;
-      }).toList();
-      
-      final categories = c.categories.map((cat) {
-        final files = cat.files.map((f) {
-          return f.id == fileId ? f.copyWith(name: newName) : f;
-        }).toList();
-        return cat.copyWith(files: files);
-      }).toList();
-      
-      return c.copyWith(
-        uncategorizedFiles: uncategorized,
-        categories: categories,
-      );
-    });
-  }
+  Future<List<Case>> renameFile(int caseId, int fileId, String newName) =>
+      _apply(caseId, (c) => c.renameFile(fileId, newName));
 
-  Future<List<Case>> deleteFile(int caseId, int fileId) async {
-    return deleteFiles(caseId, [fileId]);
-  }
+  Future<List<Case>> deleteFile(int caseId, int fileId) =>
+      deleteFiles(caseId, [fileId]);
 
-  Future<List<Case>> deleteFiles(int caseId, List<int> fileIds) async {
-    return _apply(caseId, (c) {
-      final idsToDelete = fileIds.toSet();
-      final uncategorized = c.uncategorizedFiles.where((f) => !idsToDelete.contains(f.id)).toList();
-      final categories = c.categories.map((cat) {
-        final files = cat.files.where((f) => !idsToDelete.contains(f.id)).toList();
-        return cat.copyWith(files: files, docs: files.length);
-      }).toList();
-      
-      int totalDocs = uncategorized.length;
-      for (final cat in categories) {
-        totalDocs += cat.files.length;
-      }
-          
-      return c.copyWith(
-        uncategorizedFiles: uncategorized,
-        categories: categories,
-        docs: totalDocs,
-      );
-    });
-  }
+  Future<List<Case>> deleteFiles(int caseId, List<int> fileIds) =>
+      _apply(caseId, (c) => c.removeFiles(fileIds.toSet()));
 
-  Future<List<Case>> moveFile(int caseId, int fileId, String? targetCategoryName) async {
-    return moveFiles(caseId, [fileId], targetCategoryName);
-  }
+  Future<List<Case>> moveFile(int caseId, int fileId, String? targetCategoryName) =>
+      moveFiles(caseId, [fileId], targetCategoryName);
 
-  Future<List<Case>> moveFiles(int caseId, List<int> fileIds, String? targetCategoryName) async {
-    return _apply(caseId, (c) {
-      final idsToMove = fileIds.toSet();
-      final filesToMove = <CaseFile>[];
-      
-      // Find and remove the files from their current location
-      final uncategorizedOld = c.uncategorizedFiles.where((f) {
-        if (idsToMove.contains(f.id)) {
-          filesToMove.add(f);
-          return false;
-        }
-        return true;
-      }).toList();
-      
-      final categoriesOld = c.categories.map((cat) {
-        final files = cat.files.where((f) {
-          if (idsToMove.contains(f.id)) {
-            filesToMove.add(f);
-            return false;
-          }
-          return true;
-        }).toList();
-        return cat.copyWith(files: files, docs: files.length);
-      }).toList();
-      
-      if (filesToMove.isEmpty) return c;
-      
-      // Add them to the new location
-      if (targetCategoryName == null || targetCategoryName == 'Uncategorized') {
-        return c.copyWith(
-          uncategorizedFiles: [...uncategorizedOld, ...filesToMove],
-          categories: categoriesOld,
-        );
-      } else {
-        final categoriesNew = categoriesOld.map((cat) {
-          if (cat.name == targetCategoryName) {
-            final files = [...cat.files, ...filesToMove];
-            return cat.copyWith(files: files, docs: files.length);
-          }
-          return cat;
-        }).toList();
-        return c.copyWith(
-          uncategorizedFiles: uncategorizedOld,
-          categories: categoriesNew,
-        );
-      }
-    });
-  }
+  Future<List<Case>> moveFiles(int caseId, List<int> fileIds, String? targetCategoryName) =>
+      _apply(caseId, (c) => c.moveFiles(fileIds.toSet(), targetCategoryName));
 
   /// Replaces the case matching [caseId] with [transform] applied to it,
   /// broadcasts the change, and returns the updated, unmodifiable case list.
-  List<Case> _apply(int caseId, Case Function(Case) transform) {
+  Future<List<Case>> _apply(int caseId, Case Function(Case) transform) async {
     _cases =
         _cases.map((c) => c.id == caseId ? transform(c) : c).toList();
     _broadcast();

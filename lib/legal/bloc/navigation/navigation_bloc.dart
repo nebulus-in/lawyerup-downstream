@@ -10,6 +10,7 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
   NavigationBloc() : super(const NavigationState()) {
     on<TabChanged>(_onTabChanged);
     on<CaseSelected>(_onCaseSelected);
+    on<SourceSelected>(_onSourceSelected);
     on<CategorySelected>(_onCategorySelected);
     on<DateSelected>(_onDateSelected);
     on<LongPressedIdChanged>(_onLongPressedIdChanged);
@@ -24,6 +25,7 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
       selectedCaseId: null,
       selectedCategoryId: null,
       selectedDate: null,
+      selectedSource: null,
       longPressedId: null,
     ));
   }
@@ -34,6 +36,10 @@ class NavigationBloc extends Bloc<NavigationEvent, NavigationState> {
       selectedCategoryId: null,
       longPressedId: null,
     ));
+  }
+
+  void _onSourceSelected(SourceSelected event, Emitter<NavigationState> emit) {
+    emit(state.copyWith(selectedSource: event.sourceId));
   }
 
   void _onCategorySelected(CategorySelected event, Emitter<NavigationState> emit) {

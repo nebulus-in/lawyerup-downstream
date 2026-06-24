@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
@@ -24,10 +25,10 @@ class CaseBloc extends Bloc<CaseEvent, CaseState> {
         super(const CaseState()) {
     on<LoadCases>(_onLoadCases);
     on<_CasesUpdated>(_onCasesUpdated);
-    on<CaseCreated>(_onCaseCreated);
-    on<CaseUpdated>(_onCaseUpdated);
-    on<CaseDeleted>(_onCaseDeleted);
-    on<CaseScheduled>(_onCaseScheduled);
+    on<CaseCreated>(_onCaseCreated, transformer: droppable());
+    on<CaseUpdated>(_onCaseUpdated, transformer: droppable());
+    on<CaseDeleted>(_onCaseDeleted, transformer: droppable());
+    on<CaseScheduled>(_onCaseScheduled, transformer: droppable());
 
     // Mutations from any BLoC reach us through the repository stream.
     _casesSubscription =
@@ -40,12 +41,7 @@ class CaseBloc extends Bloc<CaseEvent, CaseState> {
   Future<void> _onLoadCases(LoadCases event, Emitter<CaseState> emit) async {
     emit(state.copyWith(status: CaseStatus.loading));
     try {
-      final cases = await _repository.getCases();
-      emit(state.copyWith(
-        status: CaseStatus.success,
-        cases: cases,
-        upcomingHearings: Case.upcomingHearings(cases),
-      ));
+      _emitCases(emit, await _repository.getCases());
     } catch (e) {
       emit(state.copyWith(
         status: CaseStatus.failure,
@@ -56,61 +52,60 @@ class CaseBloc extends Bloc<CaseEvent, CaseState> {
 
   /// Single point where the canonical case list is refreshed: whenever the
   /// repository broadcasts a change, regardless of which BLoC triggered it.
-  void _onCasesUpdated(_CasesUpdated event, Emitter<CaseState> emit) {
+  void _onCasesUpdated(_CasesUpdated event, Emitter<CaseState> emit) =>
+      _emitCases(emit, event.cases);
+
+  /// Emits a success state for [cases], recomputing the derived upcoming
+  /// hearings — the one place that shape is built.
+  void _emitCases(Emitter<CaseState> emit, List<Case> cases) {
     emit(state.copyWith(
       status: CaseStatus.success,
-      cases: event.cases,
-      upcomingHearings: Case.upcomingHearings(event.cases),
+      cases: cases,
+      upcomingHearings: Case.upcomingHearings(cases),
     ));
   }
 
-  Future<void> _onCaseCreated(CaseCreated event, Emitter<CaseState> emit) async {
-    try {
-      await _repository.createCase(
-        name: event.name,
-        number: event.number,
-        court: event.court,
-        type: event.type,
-        folders: event.folders,
-      );
-    } catch (e) {
-      emit(state.copyWith(
-          errorMessage: 'Could not create the case. Please try again.'));
-    }
-  }
+  Future<void> _onCaseCreated(CaseCreated event, Emitter<CaseState> emit) =>
+      _guard(
+          emit,
+          'Could not create the case. Please try again.',
+          () => _repository.createCase(
+                name: event.name,
+                number: event.number,
+                court: event.court,
+                type: event.type,
+                folders: event.folders,
+              ));
 
-  Future<void> _onCaseUpdated(CaseUpdated event, Emitter<CaseState> emit) async {
-    try {
-      await _repository.updateCaseDetails(
-        caseId: event.caseId,
-        name: event.name,
-        number: event.number,
-        court: event.court,
-        type: event.type,
-        hearing: event.hearing,
-      );
-    } catch (e) {
-      emit(state.copyWith(
-          errorMessage: 'Could not save the case. Please try again.'));
-    }
-  }
+  Future<void> _onCaseUpdated(CaseUpdated event, Emitter<CaseState> emit) =>
+      _guard(
+          emit,
+          'Could not save the case. Please try again.',
+          () => _repository.updateCaseDetails(
+                caseId: event.caseId,
+                name: event.name,
+                number: event.number,
+                court: event.court,
+                type: event.type,
+                hearing: event.hearing,
+              ));
 
-  Future<void> _onCaseDeleted(CaseDeleted event, Emitter<CaseState> emit) async {
-    try {
-      await _repository.deleteCase(event.caseId);
-    } catch (e) {
-      emit(state.copyWith(
-          errorMessage: 'Could not delete the case. Please try again.'));
-    }
-  }
+  Future<void> _onCaseDeleted(CaseDeleted event, Emitter<CaseState> emit) =>
+      _guard(emit, 'Could not delete the case. Please try again.',
+          () => _repository.deleteCase(event.caseId));
 
-  Future<void> _onCaseScheduled(
-      CaseScheduled event, Emitter<CaseState> emit) async {
+  Future<void> _onCaseScheduled(CaseScheduled event, Emitter<CaseState> emit) =>
+      _guard(emit, 'Could not schedule the hearing. Please try again.',
+          () => _repository.scheduleHearing(event.caseId, event.hearing));
+
+  /// Runs a case command, surfacing [failMessage] as a transient error if it
+  /// throws. The updated list flows back via the repository stream.
+  Future<void> _guard(Emitter<CaseState> emit, String failMessage,
+      Future<void> Function() op) async {
     try {
-      await _repository.scheduleHearing(event.caseId, event.hearing);
-    } catch (e) {
-      emit(state.copyWith(
-          errorMessage: 'Could not schedule the hearing. Please try again.'));
+      await op();
+    } catch (_) {
+      emit(state.copyWith(errorMessage: failMessage));
     }
   }
 

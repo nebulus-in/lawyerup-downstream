@@ -8,13 +8,29 @@ void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  // Owned here so its stream controller is closed when the app tears down.
+  // RepositoryProvider in this flutter_bloc version doesn't dispose what it
+  // creates, so we hold the instance and provide it by value instead.
+  final LegalRepository _repository = LegalRepository();
+
+  @override
+  void dispose() {
+    _repository.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return RepositoryProvider(
-      create: (context) => LegalRepository(),
+    return RepositoryProvider.value(
+      value: _repository,
       child: MultiBlocProvider(
         providers: [
           BlocProvider(
