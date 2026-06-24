@@ -15,12 +15,20 @@ class CategoryDetailView extends StatelessWidget {
     final cases = context.select((CaseBloc bloc) => bloc.state.cases);
     final isMultiSelect = context.select((FileBloc bloc) => bloc.state.isMultiSelectMode);
     final selectedFileIds = context.select((FileBloc bloc) => bloc.state.selectedFileIds);
+    final fileStatus = context.select((FileBloc bloc) => bloc.state.status);
+    final uploadingToCaseId = context.select((FileBloc bloc) => bloc.state.uploadingToCaseId);
+    final uploadingToCategoryName = context.select((FileBloc bloc) => bloc.state.uploadingToCategoryName);
+    final uploadingFileName = context.select((FileBloc bloc) => bloc.state.uploadingFileName);
 
     final selectedCase = cases.firstWhere((c) => c.id == selectedCaseId);
     final cat = selectedCase.categories.firstWhere((c) => c.id == selectedCategoryId);
 
     final color = LegalTheme.getCategoryColor(cat.id);
     final bg = LegalTheme.getCategoryBg(cat.id);
+
+    final isUploadingHere = fileStatus == FileStatus.inProgress &&
+        uploadingToCaseId == selectedCase.id &&
+        uploadingToCategoryName == cat.name;
 
     return Stack(
       key: const ValueKey('category_detail'),
@@ -56,7 +64,7 @@ class CategoryDetailView extends StatelessWidget {
                   : null,
               ),
             Expanded(
-              child: cat.files.isEmpty
+              child: (cat.files.isEmpty && !isUploadingHere)
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -85,6 +93,7 @@ class CategoryDetailView extends StatelessWidget {
                   : ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
+                        if (isUploadingHere) FileSkeletonItem(fileName: uploadingFileName),
                         ...cat.files.map((file) => FileItem(caseId: selectedCase.id, file: file)),
                         const SizedBox(height: 80),
                       ],

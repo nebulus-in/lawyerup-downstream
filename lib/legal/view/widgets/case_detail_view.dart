@@ -18,6 +18,10 @@ class CaseDetailView extends StatelessWidget {
     final cases = context.select((CaseBloc bloc) => bloc.state.cases);
     final isMultiSelect = context.select((FileBloc bloc) => bloc.state.isMultiSelectMode);
     final selectedFileIds = context.select((FileBloc bloc) => bloc.state.selectedFileIds);
+    final fileStatus = context.select((FileBloc bloc) => bloc.state.status);
+    final uploadingToCaseId = context.select((FileBloc bloc) => bloc.state.uploadingToCaseId);
+    final uploadingToCategoryName = context.select((FileBloc bloc) => bloc.state.uploadingToCategoryName);
+    final uploadingFileName = context.select((FileBloc bloc) => bloc.state.uploadingFileName);
     
     final selectedCase = cases.firstWhere((c) => c.id == selectedCaseId);
 
@@ -104,13 +108,20 @@ class CaseDetailView extends StatelessWidget {
                   const SizedBox(height: 12),
                   ...selectedCase.categories
                       .map((cat) => _CategoryItem(caseId: selectedCase.id, cat: cat)),
-                  if (selectedCase.uncategorizedFiles.isNotEmpty) ...[
+                  if (selectedCase.uncategorizedFiles.isNotEmpty || 
+                      (fileStatus == FileStatus.inProgress && 
+                       uploadingToCaseId == selectedCase.id && 
+                       uploadingToCategoryName == null)) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Text('Files',
                           style: TextStyle(
                               fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
+                    if (fileStatus == FileStatus.inProgress && 
+                        uploadingToCaseId == selectedCase.id && 
+                        uploadingToCategoryName == null)
+                      FileSkeletonItem(fileName: uploadingFileName),
                     ...selectedCase.uncategorizedFiles
                         .map((file) => FileItem(caseId: selectedCase.id, file: file)),
                   ],
@@ -357,6 +368,14 @@ class _CategoryItem extends StatelessWidget {
     final bg = LegalTheme.getCategoryBg(cat.id);
     final isLongPressed = context.select((NavigationBloc bloc) => bloc.state.longPressedId == cat.id);
     final isMultiSelect = context.select((FileBloc bloc) => bloc.state.isMultiSelectMode);
+    final fileStatus = context.select((FileBloc bloc) => bloc.state.status);
+    final uploadingToCaseId = context.select((FileBloc bloc) => bloc.state.uploadingToCaseId);
+    final uploadingToCategoryName = context.select((FileBloc bloc) => bloc.state.uploadingToCategoryName);
+    final uploadingFileName = context.select((FileBloc bloc) => bloc.state.uploadingFileName);
+    
+    final isUploading = fileStatus == FileStatus.inProgress && 
+                        uploadingToCaseId == caseId && 
+                        uploadingToCategoryName == cat.name;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -373,41 +392,60 @@ class _CategoryItem extends StatelessWidget {
         await LegalModals.showCategoryOptions(context, caseId, cat);
         navBloc.add(const LongPressedIdChanged(null));
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: LegalTheme.cardDecoration(
-          border: isLongPressed ? Border.all(color: LegalTheme.blue, width: 2) : null,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                  color: bg, borderRadius: BorderRadius.circular(12)),
-              child: Icon(Icons.folder, color: color, size: 20),
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: LegalTheme.cardDecoration(
+              border: isLongPressed ? Border.all(color: LegalTheme.blue, width: 2) : null,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(cat.name,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700)),
-                  Text('${cat.docs} Documents',
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: LegalTheme.muted)),
-                ],
-              ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                      color: bg, borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.folder, color: color, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(cat.name,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text('${cat.docs} Documents',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: LegalTheme.muted)),
+                    ],
+                  ),
+                ),
+                if (isUploading)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(LegalTheme.blue),
+                    ),
+                  )
+                else
+                  const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18),
+              ],
             ),
-            const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18),
-          ],
-        ),
+          ),
+          if (isUploading)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, bottom: 12),
+              child: FileSkeletonItem(fileName: uploadingFileName),
+            ),
+        ],
       ),
     );
   }

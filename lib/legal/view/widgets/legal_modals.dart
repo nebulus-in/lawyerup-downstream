@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show listEquals, ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import '../legal_theme.dart';
 import '../../bloc/blocs.dart';
 import '../../../models/legal_models.dart';
@@ -10,6 +11,7 @@ import '../../../services/download_service.dart';
 import '../../../services/ocr_service.dart';
 import '../../../services/docx_to_pdf_service.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
 class LegalModals {
   static void showCasePicker(
     BuildContext context,
@@ -347,10 +349,27 @@ class LegalModals {
               title: 'Upload file',
               subtitle: 'Add a document already on your device',
               enabled: true,
-              onTap: () {
+              onTap: () async {
+                final fileBloc = context.read<FileBloc>();
+                final messenger = ScaffoldMessenger.of(context);
                 Navigator.pop(modalContext);
-                context.read<FileBloc>().add(FileUploaded(caseId, categoryName));
-                snack(context, 'File uploaded');
+
+                try {
+                  final result = await FilePicker.platform.pickFiles();
+                  if (result != null && result.files.single.path != null) {
+                    final file = result.files.single;
+                    fileBloc.add(FileUploaded(
+                      caseId: caseId,
+                      categoryName: categoryName,
+                      name: file.name,
+                      size: formatFileSize(file.size),
+                      path: file.path,
+                    ));
+                    _snack(messenger, 'File uploaded: ${file.name}');
+                  }
+                } catch (e) {
+                  _snack(messenger, 'Failed to pick file: $e');
+                }
               },
             ),
           ],

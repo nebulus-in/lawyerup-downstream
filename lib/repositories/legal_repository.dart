@@ -213,9 +213,14 @@ class LegalRepository {
   Future<List<Case>> deleteCategory(int caseId, int categoryId) =>
       _apply(caseId, (c) => c.removeCategory(categoryId));
 
-  Future<List<Case>> uploadFile(int caseId, String? categoryName) {
-    return _addFile(caseId, categoryName,
-        name: 'Simulated_Upload.pdf', size: '1.5 MB');
+  Future<List<Case>> uploadFile(
+    int caseId,
+    String? categoryName, {
+    required String name,
+    required String size,
+    String? path,
+  }) {
+    return _addFile(caseId, categoryName, name: name, size: size, path: path);
   }
 
   /// Files a scanned PDF under [categoryName] (or the uncategorized bucket),
@@ -259,6 +264,9 @@ class LegalRepository {
     required String size,
     String? path,
   }) async {
+    // Add a small delay to simulate file processing and show skeleton loader
+    await Future.delayed(const Duration(milliseconds: 800));
+    
     final file = CaseFile(
       id: DateTime.now().millisecondsSinceEpoch,
       name: name,

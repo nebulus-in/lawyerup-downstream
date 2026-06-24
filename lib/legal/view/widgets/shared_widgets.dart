@@ -295,3 +295,116 @@ class FileItem extends StatelessWidget {
     );
   }
 }
+
+class FileSkeletonItem extends StatefulWidget {
+  final String? fileName;
+  const FileSkeletonItem({super.key, this.fileName});
+
+  @override
+  State<FileSkeletonItem> createState() => _FileSkeletonItemState();
+}
+
+class _FileSkeletonItemState extends State<FileSkeletonItem>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: LegalTheme.cardDecoration(),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Color.lerp(
+                    const Color(0xFFF0F2F5),
+                    const Color(0xFFE2E6EC),
+                    _controller.value,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(LegalTheme.blue),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.fileName != null)
+                      Text(
+                        widget.fileName!,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: LegalTheme.muted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    else
+                      Container(
+                        width: 140,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(
+                            const Color(0xFFF0F2F5),
+                            const Color(0xFFE2E6EC),
+                            _controller.value,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 80,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Color.lerp(
+                          const Color(0xFFF0F2F5),
+                          const Color(0xFFE2E6EC),
+                          _controller.value,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

@@ -51,8 +51,19 @@ class FileBloc extends Bloc<FileEvent, FileState> {
   }
 
   Future<void> _onFileUploaded(FileUploaded event, Emitter<FileState> emit) =>
-      _runMutation(emit, 'Could not upload the file. Please try again.',
-          () => _repository.uploadFile(event.caseId, event.categoryName));
+      _runMutation(
+          emit,
+          'Could not upload the file. Please try again.',
+          () => _repository.uploadFile(
+                event.caseId,
+                event.categoryName,
+                name: event.name,
+                size: event.size,
+                path: event.path,
+              ),
+          uploadingToCaseId: event.caseId,
+          uploadingToCategoryName: event.categoryName,
+          uploadingFileName: event.name);
 
   Future<void> _onDocumentScanned(
           DocumentScanned event, Emitter<FileState> emit) =>
@@ -60,7 +71,10 @@ class FileBloc extends Bloc<FileEvent, FileState> {
           emit,
           'Could not save the scanned document. Please try again.',
           () => _repository.addScannedDocument(
-              event.caseId, event.categoryName, event.document));
+              event.caseId, event.categoryName, event.document),
+          uploadingToCaseId: event.caseId,
+          uploadingToCategoryName: event.categoryName,
+          uploadingFileName: event.document.fileName);
 
   Future<void> _onFileDownloaded(
           FileDownloaded event, Emitter<FileState> emit) =>
@@ -68,7 +82,10 @@ class FileBloc extends Bloc<FileEvent, FileState> {
           emit,
           'Could not save the download. Please try again.',
           () => _repository.addDownloadedFile(
-              event.caseId, event.categoryName, event.document));
+              event.caseId, event.categoryName, event.document),
+          uploadingToCaseId: event.caseId,
+          uploadingToCategoryName: event.categoryName,
+          uploadingFileName: event.document.fileName);
 
   Future<void> _onOcrTextSaved(OcrTextSaved event, Emitter<FileState> emit) =>
       _runMutation(
@@ -79,14 +96,20 @@ class FileBloc extends Bloc<FileEvent, FileState> {
                 categoryName: event.categoryName,
                 text: event.text,
                 fileName: event.fileName,
-              ));
+              ),
+          uploadingToCaseId: event.caseId,
+          uploadingToCategoryName: event.categoryName,
+          uploadingFileName: event.fileName);
 
   Future<void> _onPdfConversionSaved(PdfConversionSaved event, Emitter<FileState> emit) =>
       _runMutation(
           emit,
           'Could not save PDF conversion. Please try again.',
           () => _repository.savePdfConversion(
-              event.caseId, event.categoryName, event.document));
+              event.caseId, event.categoryName, event.document),
+          uploadingToCaseId: event.caseId,
+          uploadingToCategoryName: event.categoryName,
+          uploadingFileName: event.document.fileName);
 
   Future<void> _onFileRenamed(FileRenamed event, Emitter<FileState> emit) =>
       _runMutation(
@@ -128,16 +151,33 @@ class FileBloc extends Bloc<FileEvent, FileState> {
     String failMessage,
     Future<void> Function() op, {
     bool clearSelection = false,
+    int? uploadingToCaseId,
+    String? uploadingToCategoryName,
+    String? uploadingFileName,
   }) async {
-    emit(state.copyWith(status: FileStatus.inProgress));
+    emit(state.copyWith(
+      status: FileStatus.inProgress,
+      uploadingToCaseId: uploadingToCaseId,
+      uploadingToCategoryName: uploadingToCategoryName,
+      uploadingFileName: uploadingFileName,
+    ));
     try {
       await op();
       emit(state.copyWith(
         status: FileStatus.idle,
         selectedFileIds: clearSelection ? <int>{} : null,
+        uploadingToCaseId: null,
+        uploadingToCategoryName: null,
+        uploadingFileName: null,
       ));
     } catch (_) {
-      emit(state.copyWith(status: FileStatus.idle, errorMessage: failMessage));
+      emit(state.copyWith(
+        status: FileStatus.idle,
+        errorMessage: failMessage,
+        uploadingToCaseId: null,
+        uploadingToCategoryName: null,
+        uploadingFileName: null,
+      ));
     }
   }
 }

@@ -18,10 +18,20 @@ class SelectionCleared extends FileEvent {}
 class FileUploaded extends FileEvent {
   final int caseId;
   final String? categoryName;
+  final String name;
+  final String size;
+  final String? path;
 
-  const FileUploaded(this.caseId, this.categoryName);
+  const FileUploaded({
+    required this.caseId,
+    this.categoryName,
+    required this.name,
+    required this.size,
+    this.path,
+  });
+
   @override
-  List<Object?> get props => [caseId, categoryName];
+  List<Object?> get props => [caseId, categoryName, name, size, path];
 }
 
 class DocumentScanned extends FileEvent {
