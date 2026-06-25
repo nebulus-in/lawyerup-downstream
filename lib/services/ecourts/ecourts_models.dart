@@ -37,6 +37,11 @@ class EcourtsParty extends Equatable {
             json['advocate'] == null ? null : _str(json['advocate']),
       );
 
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        if (advocate != null) 'advocate': advocate,
+      };
+
   @override
   List<Object?> get props => [name, advocate];
 }
@@ -52,6 +57,11 @@ class EcourtsAct extends Equatable {
         act: _str(json['act']),
         section: _str(json['section']),
       );
+
+  Map<String, dynamic> toJson() => {
+        'act': act,
+        'section': section,
+      };
 
   @override
   List<Object?> get props => [act, section];
@@ -79,6 +89,14 @@ class EcourtsHearing extends Equatable {
         judge: _str(json['judge']),
       );
 
+  Map<String, dynamic> toJson() => {
+        if (businessOnDate != null)
+          'businessOnDate': businessOnDate!.toIso8601String(),
+        if (nextDate != null) 'nextDate': nextDate!.toIso8601String(),
+        'purpose': purpose,
+        'judge': judge,
+      };
+
   @override
   List<Object?> get props => [businessOnDate, nextDate, purpose, judge];
 }
@@ -104,6 +122,13 @@ class EcourtsOrder extends Equatable {
         url: _str(json['url']),
       );
 
+  Map<String, dynamic> toJson() => {
+        'number': number,
+        'name': name,
+        if (date != null) 'date': date!.toIso8601String(),
+        'url': url,
+      };
+
   @override
   List<Object?> get props => [number, name, date, url];
 }
@@ -125,6 +150,12 @@ class EcourtsFir extends Equatable {
         firNumber: _str(json['firNumber']),
         year: _str(json['year']),
       );
+
+  Map<String, dynamic> toJson() => {
+        'policeStation': policeStation,
+        'firNumber': firNumber,
+        'year': year,
+      };
 
   @override
   List<Object?> get props => [policeStation, firNumber, year];
@@ -166,6 +197,19 @@ class EcourtsCaseStatus extends Equatable {
             : _str(json['natureOfDisposal']),
         courtNumberAndJudge: _str(json['courtNumberAndJudge']),
       );
+
+  Map<String, dynamic> toJson() => {
+        'stage': stage,
+        'caseStatus': caseStatus,
+        if (firstHearingDate != null)
+          'firstHearingDate': firstHearingDate!.toIso8601String(),
+        if (nextHearingDate != null)
+          'nextHearingDate': nextHearingDate!.toIso8601String(),
+        if (decisionDate != null)
+          'decisionDate': decisionDate!.toIso8601String(),
+        if (natureOfDisposal != null) 'natureOfDisposal': natureOfDisposal,
+        'courtNumberAndJudge': courtNumberAndJudge,
+      };
 
   @override
   List<Object?> get props => [
@@ -244,6 +288,25 @@ class EcourtsCase extends Equatable {
         fetchedAt: _date(json['fetchedAt']) ?? DateTime.now(),
       );
 
+  Map<String, dynamic> toJson() => {
+        'cnr': cnr,
+        'caseType': caseType,
+        'filingNumber': filingNumber,
+        if (filingDate != null) 'filingDate': filingDate!.toIso8601String(),
+        'registrationNumber': registrationNumber,
+        if (registrationDate != null)
+          'registrationDate': registrationDate!.toIso8601String(),
+        'status': status.toJson(),
+        'petitioners': petitioners.map((e) => e.toJson()).toList(),
+        'respondents': respondents.map((e) => e.toJson()).toList(),
+        'acts': acts.map((e) => e.toJson()).toList(),
+        'history': history.map((e) => e.toJson()).toList(),
+        'orders': orders.map((e) => e.toJson()).toList(),
+        if (fir != null) 'fir': fir!.toJson(),
+        'source': source,
+        'fetchedAt': fetchedAt.toIso8601String(),
+      };
+
   String get petitionerName =>
       petitioners.isEmpty ? 'Unknown' : petitioners.first.name;
   String get respondentName =>
@@ -295,6 +358,17 @@ class CauseListEntry extends Equatable {
         time: _str(json['time']),
       );
 
+  Map<String, dynamic> toJson() => {
+        'serial': serial,
+        'cnr': cnr,
+        'caseNumber': caseNumber,
+        'title': title,
+        'purpose': purpose,
+        'court': court,
+        'judge': judge,
+        'time': time,
+      };
+
   @override
   List<Object?> get props => [serial, cnr, caseNumber, title, court];
 }
@@ -323,6 +397,14 @@ class CaseSearchHit extends Equatable {
         caseStatus: _str(json['caseStatus']),
       );
 
+  Map<String, dynamic> toJson() => {
+        'cnr': cnr,
+        'caseNumber': caseNumber,
+        'title': title,
+        'court': court,
+        'caseStatus': caseStatus,
+      };
+
   @override
   List<Object?> get props => [cnr, caseNumber, title, court, caseStatus];
 }
@@ -340,6 +422,12 @@ class CourtRef extends Equatable {
         name: _str(json['name']),
         state: _str(json['state']),
       );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
+        'state': state,
+      };
 
   @override
   List<Object?> get props => [code, name, state];

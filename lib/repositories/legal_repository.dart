@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' hide Category;
+import 'package:path_provider/path_provider.dart';
 
 import '../models/legal_models.dart';
 import '../services/docx_to_pdf_service.dart';
@@ -6,6 +11,10 @@ import '../services/document_scanner_service.dart';
 import '../services/download_service.dart';
 
 class LegalRepository {
+  LegalRepository() {
+    _init();
+  }
+
   /// Broadcasts the current case list after every mutation, making this
   /// repository the single source of truth. BLoCs subscribe via [casesStream]
   /// so they never hold divergent copies of the data.
@@ -16,8 +25,42 @@ class LegalRepository {
   /// their initial state from [getCases]; the stream replays nothing.
   Stream<List<Case>> get casesStream => _controller.stream;
 
-  List<Case> _cases = [
-    const Case(
+  List<Case> _cases = [];
+
+  Future<void> _init() async {
+    try {
+      final file = await _getStorageFile();
+      if (await file.exists()) {
+        final json = jsonDecode(await file.readAsString()) as List;
+        _cases = json.map((e) => Case.fromJson(e as Map<String, dynamic>)).toList();
+      } else {
+        _cases = _initialCases;
+        await _save();
+      }
+    } catch (e) {
+      debugPrint('Failed to load cases: $e');
+      _cases = _initialCases;
+    }
+    _broadcast();
+  }
+
+  Future<File> _getStorageFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/cases_storage.json');
+  }
+
+  Future<void> _save() async {
+    try {
+      final file = await _getStorageFile();
+      final json = _cases.map((c) => c.toJson()).toList();
+      await file.writeAsString(jsonEncode(json));
+    } catch (e) {
+      debugPrint('Failed to save cases: $e');
+    }
+  }
+
+  static const List<Case> _initialCases = [
+    Case(
       id: 1,
       name: 'Smith v. Johnson',
       number: '2024-CV-0847',
@@ -71,7 +114,7 @@ class LegalRepository {
         ),
       ],
     ),
-    const Case(
+    Case(
       id: 2,
       name: 'Mehta v. State Bank',
       number: '2024-CR-0312',
@@ -126,8 +169,7 @@ class LegalRepository {
   ];
 
   Future<List<Case>> getCases() async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 300));
+    // Return the cached cases if they are already loaded
     return List.unmodifiable(_cases);
   }
 
@@ -164,6 +206,7 @@ class LegalRepository {
     );
 
     _cases = [..._cases, newCase];
+    await _save();
     _broadcast();
     return List.unmodifiable(_cases);
   }
@@ -190,6 +233,7 @@ class LegalRepository {
 
   Future<List<Case>> deleteCase(int caseId) async {
     _cases = _cases.where((c) => c.id != caseId).toList();
+    await _save();
     _broadcast();
     return List.unmodifiable(_cases);
   }
@@ -297,6 +341,7 @@ class LegalRepository {
   Future<List<Case>> _apply(int caseId, Case Function(Case) transform) async {
     _cases =
         _cases.map((c) => c.id == caseId ? transform(c) : c).toList();
+    await _save();
     _broadcast();
     return List.unmodifiable(_cases);
   }

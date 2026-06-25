@@ -136,6 +136,19 @@ class CaseSearchResult {
   final int total;
 
   const CaseSearchResult({required this.hits, required this.total});
+
+  factory CaseSearchResult.fromJson(Map<String, dynamic> json) => CaseSearchResult(
+        hits: (json['hits'] as List<dynamic>?)
+                ?.map((e) => CaseSearchHit.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        total: json['total'] as int? ?? 0,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'hits': hits.map((e) => e.toJson()).toList(),
+        'total': total,
+      };
 }
 
 /// A cause-list request for [date], optionally narrowed to one court or case.

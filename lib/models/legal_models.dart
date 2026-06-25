@@ -18,6 +18,22 @@ class CaseFile extends Equatable {
     this.path,
   });
 
+  factory CaseFile.fromJson(Map<String, dynamic> json) => CaseFile(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        size: json['size'] as String,
+        date: json['date'] as String,
+        path: json['path'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'size': size,
+        'date': date,
+        if (path != null) 'path': path,
+      };
+
   /// Whether this record points at a file that can be opened on the device.
   bool get isLocal => path != null;
 
@@ -59,6 +75,23 @@ class Category extends Equatable {
 
     this.files = const [],
   });
+
+  factory Category.fromJson(Map<String, dynamic> json) => Category(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        docs: json['docs'] as int,
+        files: (json['files'] as List<dynamic>?)
+                ?.map((e) => CaseFile.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'docs': docs,
+        'files': files.map((e) => e.toJson()).toList(),
+      };
 
   @override
   List<Object?> get props => [id, name, docs, files];
@@ -107,6 +140,38 @@ class Case extends Equatable {
     this.uncategorizedFiles = const [],
     this.categories = const [],
   });
+
+  factory Case.fromJson(Map<String, dynamic> json) => Case(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        number: json['number'] as String,
+        court: json['court'] as String,
+        type: json['type'] as String,
+        cnr: json['cnr'] as String?,
+        docs: json['docs'] as int,
+        hearing: json['hearing'] as String,
+        uncategorizedFiles: (json['uncategorizedFiles'] as List<dynamic>?)
+                ?.map((e) => CaseFile.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+        categories: (json['categories'] as List<dynamic>?)
+                ?.map((e) => Category.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'number': number,
+        'court': court,
+        'type': type,
+        if (cnr != null) 'cnr': cnr,
+        'docs': docs,
+        'hearing': hearing,
+        'uncategorizedFiles': uncategorizedFiles.map((e) => e.toJson()).toList(),
+        'categories': categories.map((e) => e.toJson()).toList(),
+      };
 
   static const _monthAbbr = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

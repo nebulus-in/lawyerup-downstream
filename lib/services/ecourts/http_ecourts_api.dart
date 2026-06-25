@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import 'ecourts_api.dart';
 import 'ecourts_models.dart';
@@ -42,7 +45,7 @@ class HttpEcourtsApi implements EcourtsApi {
   Future<EcourtsCase> caseByCnr(String cnr) async {
     if (!Cnr.isValid(cnr)) throw const InvalidCnrException();
     final norm = Cnr.normalize(cnr);
-    if (_cacheGet('case:$norm') case final EcourtsCase hit) return hit;
+    if (await _cacheGet('case:$norm') case final EcourtsCase hit) return hit;
     final resp = await _send(
       () => _client.get(_uri('/api/partner/case/$norm'), headers: _headers),
       _caseRead,
@@ -53,7 +56,7 @@ class HttpEcourtsApi implements EcourtsApi {
     final data = (body['data'] as Map?)?.cast<String, dynamic>();
     if (data == null) throw CaseNotFoundException(norm);
     final result = _caseFromDetail(data);
-    _cachePut('case:$norm', result);
+    await _cachePut('case:$norm', result);
     return result;
   }
 
@@ -75,7 +78,7 @@ class HttpEcourtsApi implements EcourtsApi {
     // Clicking a CNR-less board entry resolves it through here; cache so a
     // repeat tap doesn't re-search.
     final key = 'search:${params['query']}:${query.courtCode ?? ''}:${query.year ?? ''}';
-    if (_cacheGet(key) case final CaseSearchResult hit) return hit;
+    if (await _cacheGet(key) case final CaseSearchResult hit) return hit;
 
     final body = await _getJson('/api/partner/search', params: params);
     final data = (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -95,7 +98,7 @@ class HttpEcourtsApi implements EcourtsApi {
     final total = _int(data['totalCount'],
         _int(data['returnedCount'], hits.length));
     final result = CaseSearchResult(hits: hits, total: total);
-    _cachePut(key, result);
+    await _cachePut(key, result);
     return result;
   }
 
@@ -164,7 +167,7 @@ class HttpEcourtsApi implements EcourtsApi {
     if (query.cnr != null) params['query'] = query.cnr;
 
     final key = 'cause:${params['date']}:${query.courtCode ?? ''}:${query.cnr ?? ''}';
-    if (_cacheGet(key) case final List<CauseListEntry> hit) return hit;
+    if (await _cacheGet(key) case final List<CauseListEntry> hit) return hit;
 
     final body = await _getJson('/api/partner/causelist/search', params: params);
     final data = (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -194,7 +197,7 @@ class HttpEcourtsApi implements EcourtsApi {
         time: _first([_str(e['time']), _str(e['hearingTime'])]),
       );
     }).toList();
-    _cachePut(key, entries);
+    await _cachePut(key, entries);
     return entries;
   }
 
@@ -360,29 +363,103 @@ class HttpEcourtsApi implements EcourtsApi {
   }
 
   // --- 12h read cache ------------------------------------------------------
-  // Static so it outlives the per-mount HttpEcourtsApi the view builds — case
-  // detail and the day's cause list are otherwise re-fetched on every visit.
-  // ponytail: in-memory only, so a cold restart re-fetches; persist via
-  // path_provider if surviving restart matters.
+  // Static so it outlives the per-mount HttpEcourtsApi the view builds.
+  // Persisted to the application documents directory to survive app restarts.
 
   static const _cacheTtl = Duration(hours: 12);
   static final _cache = <String, ({Object value, DateTime at})>{};
+  static Future<void>? _initFuture;
 
   static bool fresh(DateTime at, DateTime now) =>
-      now.difference(at) < _cacheTtl; // test seam
+      now.difference(at) < _cacheTtl;
 
-  static Object? _cacheGet(String key) {
+  static Future<File> _getCacheFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/ecourts_cache.json');
+  }
+
+  static Future<void> _ensureInitialized() {
+    return _initFuture ??= _doInitCache();
+  }
+
+  static Future<void> _doInitCache() async {
+    try {
+      final file = await _getCacheFile();
+      if (await file.exists()) {
+        final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        final now = DateTime.now();
+        var dirty = false;
+        
+        json.forEach((key, entry) {
+          final at = DateTime.parse(entry['at'] as String);
+          if (fresh(at, now)) {
+            final val = entry['value'];
+            Object? decoded;
+            if (key.startsWith('case:')) {
+              decoded = EcourtsCase.fromJson(val as Map<String, dynamic>);
+            } else if (key.startsWith('search:')) {
+              decoded = CaseSearchResult.fromJson(val as Map<String, dynamic>);
+            } else if (key.startsWith('cause:')) {
+              decoded = (val as List)
+                  .map((e) => CauseListEntry.fromJson(e as Map<String, dynamic>))
+                  .toList();
+            }
+            if (decoded != null) {
+              _cache[key] = (value: decoded, at: at);
+            }
+          } else {
+            dirty = true;
+          }
+        });
+        
+        // If we skipped stale entries, update the disk file immediately to prune them.
+        if (dirty) {
+          unawaited(_saveCache());
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load ecourts cache: $e');
+    }
+  }
+
+  static Future<void> _saveCache() async {
+    try {
+      final file = await _getCacheFile();
+      final json = <String, dynamic>{};
+      _cache.forEach((key, entry) {
+        dynamic val;
+        final v = entry.value;
+        if (v is EcourtsCase) val = v.toJson();
+        else if (v is CaseSearchResult) val = v.toJson();
+        else if (v is List<CauseListEntry>) val = v.map((e) => e.toJson()).toList();
+        
+        if (val != null) {
+          json[key] = {'at': entry.at.toIso8601String(), 'value': val};
+        }
+      });
+      await file.writeAsString(jsonEncode(json));
+    } catch (e) {
+      debugPrint('Failed to save ecourts cache: $e');
+    }
+  }
+
+  static Future<Object?> _cacheGet(String key) async {
+    await _ensureInitialized();
     final e = _cache[key];
     if (e == null) return null;
     if (!fresh(e.at, DateTime.now())) {
       _cache.remove(key);
+      unawaited(_saveCache());
       return null;
     }
     return e.value;
   }
 
-  static void _cachePut(String key, Object value) =>
-      _cache[key] = (value: value, at: DateTime.now());
+  static Future<void> _cachePut(String key, Object value) async {
+    await _ensureInitialized();
+    _cache[key] = (value: value, at: DateTime.now());
+    await _saveCache();
+  }
 
   // --- HTTP plumbing -------------------------------------------------------
 
@@ -510,3 +587,5 @@ List<EcourtsParty> _parties(List<String> names, List<String> advocates) => [
 
 String _ymd(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+void debugPrint(String s) => print(s);
