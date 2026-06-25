@@ -4,18 +4,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../legal_theme.dart';
 import '../../bloc/blocs.dart';
-import '../../bloc/ecourts/ecourts_cubit.dart';
 import '../../../models/legal_models.dart';
 import '../../../services/ecourts/ecourts_api.dart';
 import '../../../services/ecourts/ecourts_models.dart';
-import '../../../services/ecourts/mock_ecourts_api.dart';
+import '../../../services/ecourts/http_ecourts_api.dart';
 import 'legal_modals.dart';
 
 /// The eCourts "Case Status" destination: look a case up by its 16-character
 /// CNR and read its live status straight from the (placeholder) eCourts API.
 ///
-/// It owns its own [EcourtsCubit] backed by [MockEcourtsApi]; swapping the mock
-/// for a live client is the only change needed to make this real.
+/// It owns its own [EcourtsBloc] backed by [HttpEcourtsApi], the live
+/// server-side proxy client. (Swap in `MockEcourtsApi` for offline demos.)
 class ECourtsView extends StatelessWidget {
   const ECourtsView({super.key});
 
@@ -27,7 +26,7 @@ class ECourtsView extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       key: const ValueKey('ecourts'),
-      create: (_) => EcourtsCubit(MockEcourtsApi()),
+      create: (_) => EcourtsBloc(HttpEcourtsApi()),
       child: const _ECourtsScreen(),
     );
   }
@@ -97,24 +96,24 @@ class _ECourtsScreenState extends State<_ECourtsScreen> {
 
   void _submit() {
     FocusScope.of(context).unfocus();
-    context.read<EcourtsCubit>().lookup(_controller.text);
+    context.read<EcourtsBloc>().add(EcourtsLookupRequested(_controller.text));
   }
 
   void _runCnr(String cnr) {
     _controller.text = Cnr.normalize(cnr);
     FocusScope.of(context).unfocus();
-    context.read<EcourtsCubit>().lookup(cnr);
+    context.read<EcourtsBloc>().add(EcourtsLookupRequested(cnr));
   }
 
   /// System back steps out of a result first, then leaves the screen — so a
   /// stray back press never drops the user straight out of research.
   void _onBack() {
-    final cubit = context.read<EcourtsCubit>();
-    if (cubit.state.status == EcourtsStatus.idle) {
+    final bloc = context.read<EcourtsBloc>();
+    if (bloc.state.status == EcourtsStatus.idle) {
       context.read<NavigationBloc>().add(const SourceSelected(null));
     } else {
       _controller.clear();
-      cubit.reset();
+      bloc.add(const EcourtsResetRequested());
     }
   }
 
@@ -142,7 +141,7 @@ class _ECourtsScreenState extends State<_ECourtsScreen> {
                       onSubmit: _submit,
                       onSample: _runCnr,
                     ),
-                    _Body(onCnr: _runCnr),
+                    const _Body(),
                   ],
                 ),
               ),
@@ -256,7 +255,7 @@ class _LookupCardSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = context.select((EcourtsCubit c) => c.state.status);
+    final status = context.select((EcourtsBloc b) => b.state.status);
     final isIdle = status == EcourtsStatus.idle;
 
     return AnimatedSize(
@@ -297,8 +296,8 @@ class _LookupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loading = context.select(
-        (EcourtsCubit c) => c.state.status == EcourtsStatus.loading);
-    final recent = context.select((EcourtsCubit c) => c.state.recent);
+        (EcourtsBloc b) => b.state.status == EcourtsStatus.loading);
+    final recent = context.select((EcourtsBloc b) => b.state.recent);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
@@ -508,17 +507,16 @@ class _CnrChips extends StatelessWidget {
 
 /// Swaps the body for the current lookup state.
 class _Body extends StatelessWidget {
-  final void Function(String) onCnr;
-  const _Body({required this.onCnr});
+  const _Body();
 
   @override
   Widget build(BuildContext context) {
-    final status = context.select((EcourtsCubit c) => c.state.status);
+    final status = context.select((EcourtsBloc b) => b.state.status);
 
     final Widget child = switch (status) {
       EcourtsStatus.success => _CaseResult(
           key: const ValueKey('result'),
-          result: context.select((EcourtsCubit c) => c.state.result!),
+          result: context.select((EcourtsBloc b) => b.state.result!),
         ),
       EcourtsStatus.loading =>
         const _ResultSkeleton(key: ValueKey('loading')),
@@ -526,7 +524,7 @@ class _Body extends StatelessWidget {
       EcourtsStatus.invalid ||
       EcourtsStatus.error =>
         const _EmptyResult(key: ValueKey('empty')),
-      EcourtsStatus.idle => _IdleBody(key: const ValueKey('idle'), onCnr: onCnr),
+      EcourtsStatus.idle => const _IdleBody(key: ValueKey('idle')),
     };
 
     return AnimatedSwitcher(
@@ -540,14 +538,13 @@ class _Body extends StatelessWidget {
 // --- Idle: today's cause list -------------------------------------------------
 
 class _IdleBody extends StatelessWidget {
-  final void Function(String) onCnr;
-  const _IdleBody({super.key, required this.onCnr});
+  const _IdleBody({super.key});
 
   @override
   Widget build(BuildContext context) {
     final loading =
-        context.select((EcourtsCubit c) => c.state.causeListLoading);
-    final list = context.select((EcourtsCubit c) => c.state.causeList);
+        context.select((EcourtsBloc b) => b.state.causeListLoading);
+    final list = context.select((EcourtsBloc b) => b.state.causeList);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,19 +574,60 @@ class _IdleBody extends StatelessWidget {
         if (loading)
           const _CauseListSkeleton()
         else
-          ...list.map((e) => _CauseRow(entry: e, onTap: () => onCnr(e.cnr))),
+          ...list.map((e) {
+            // Every listing opens its case detail: high-court rows carry a CNR
+            // and open directly; district rows (which usually omit the CNR) get
+            // one resolved from the case number. Only a row with neither a CNR
+            // nor a case number can't be opened.
+            final openable =
+                Cnr.isValid(e.cnr) || e.caseNumber.trim().isNotEmpty;
+            return _CauseRow(
+              entry: e,
+              openable: openable,
+              onTap: () => openable
+                  ? context.read<EcourtsBloc>().add(EcourtsCauseEntryOpened(e))
+                  : _noId(context),
+            );
+          }),
       ],
     );
+  }
+
+  /// Explains why an unidentifiable listing (no CNR and no case number) can't
+  /// be opened, instead of failing the lookup with a misleading message.
+  void _noId(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text(
+            "This listing has no case number yet, so it can't be opened.",
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: LegalTheme.ink,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ));
   }
 }
 
 class _CauseRow extends StatelessWidget {
   final CauseListEntry entry;
   final VoidCallback onTap;
-  const _CauseRow({required this.entry, required this.onTap});
+
+  /// Whether this listing carries a CNR and can be pulled up by number.
+  final bool openable;
+
+  const _CauseRow({
+    required this.entry,
+    required this.onTap,
+    this.openable = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final time = entry.time.trim();
+    final hasTime = time.isNotEmpty;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -607,13 +645,13 @@ class _CauseRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11)),
               child: Column(
                 children: [
-                  Text(entry.time.split(' ').first,
+                  Text(hasTime ? time.split(' ').first : '#${entry.serial}',
                       style: const TextStyle(
                           fontFamily: _mono,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: LegalTheme.ink)),
-                  Text(entry.time.split(' ').last,
+                  Text(hasTime ? time.split(' ').last : 'item',
                       style: const TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
@@ -643,7 +681,20 @@ class _CauseRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18),
+            if (openable)
+              const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18)
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                    color: LegalTheme.field,
+                    borderRadius: BorderRadius.circular(7)),
+                child: const Text('No ID',
+                    style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        color: LegalTheme.muted)),
+              ),
           ],
         ),
       ),
@@ -1327,15 +1378,17 @@ class _EmptyResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = context.select((EcourtsCubit c) => c.state.status);
-    final queryCnr = context.select((EcourtsCubit c) => c.state.queryCnr);
-    final message = context.select((EcourtsCubit c) => c.state.message);
+    final status = context.select((EcourtsBloc b) => b.state.status);
+    final queryCnr = context.select((EcourtsBloc b) => b.state.queryCnr);
+    final message = context.select((EcourtsBloc b) => b.state.message);
 
     final (icon, title, body) = switch (status) {
       EcourtsStatus.notFound => (
           Icons.search_off_rounded,
-          'No case for that CNR',
-          'No record carries ${Cnr.format(queryCnr)}. Double-check the 16 characters.'
+          'No case found',
+          Cnr.isValid(queryCnr)
+              ? 'No record carries ${Cnr.format(queryCnr)}. Double-check the 16 characters.'
+              : 'No case matched ${queryCnr.isEmpty ? 'that listing' : queryCnr}. It may not be published yet.'
         ),
       EcourtsStatus.invalid => (
           Icons.error_outline_rounded,

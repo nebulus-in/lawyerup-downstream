@@ -57,6 +57,10 @@ abstract class EcourtsApi {
 
   /// The daily cause list — matters scheduled before a court on a date.
   Future<List<CauseListEntry>> causeList(CauseListQuery query);
+
+  /// Releases any resources held by the implementation (e.g. an HTTP client).
+  /// In-memory implementations like the mock make this a no-op.
+  void dispose();
 }
 
 /// Helpers for the Case Number Record (CNR): the 16-character national case ID.

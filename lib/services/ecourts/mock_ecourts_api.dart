@@ -21,6 +21,9 @@ class MockEcourtsApi implements EcourtsApi {
       Future.delayed(Duration(milliseconds: ms), () => value);
 
   @override
+  void dispose() {}
+
+  @override
   Future<Enumerations> enumerations() => _latency(
         const Enumerations(
           caseTypes: [
