@@ -163,6 +163,12 @@ class FileBloc extends Bloc<FileEvent, FileState> {
     ));
     try {
       await op();
+
+      // Add a tiny delay to ensure the data update from LegalRepository has
+      // propagated through CaseBloc to the UI before we hide the skeleton.
+      // This prevents the "blank gap" flicker.
+      await Future.delayed(const Duration(milliseconds: 50));
+
       emit(state.copyWith(
         status: FileStatus.idle,
         selectedFileIds: clearSelection ? <int>{} : null,

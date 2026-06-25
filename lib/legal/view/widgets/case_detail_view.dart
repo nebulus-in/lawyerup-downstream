@@ -25,6 +25,10 @@ class CaseDetailView extends StatelessWidget {
     
     final selectedCase = cases.firstWhere((c) => c.id == selectedCaseId);
 
+    // Normalize category name for matching the uncategorized bucket condition
+    final isUncategorizedUpload = uploadingToCategoryName == null || 
+                                   uploadingToCategoryName == Category.uncategorized;
+
     return Stack(
       key: const ValueKey('case_detail'),
       children: [
@@ -111,7 +115,7 @@ class CaseDetailView extends StatelessWidget {
                   if (selectedCase.uncategorizedFiles.isNotEmpty || 
                       (fileStatus == FileStatus.inProgress && 
                        uploadingToCaseId == selectedCase.id && 
-                       uploadingToCategoryName == null)) ...[
+                       isUncategorizedUpload)) ...[
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Text('Files',
@@ -120,7 +124,7 @@ class CaseDetailView extends StatelessWidget {
                     ),
                     if (fileStatus == FileStatus.inProgress && 
                         uploadingToCaseId == selectedCase.id && 
-                        uploadingToCategoryName == null)
+                        isUncategorizedUpload)
                       FileSkeletonItem(fileName: uploadingFileName),
                     ...selectedCase.uncategorizedFiles
                         .map((file) => FileItem(caseId: selectedCase.id, file: file)),
