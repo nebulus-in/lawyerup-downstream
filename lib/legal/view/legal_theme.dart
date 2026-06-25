@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../models/legal_models.dart';
+
 class LegalTheme {
   static const ink = Color(0xFF0D1220);
   static const blue = Color(0xFF1463E0);
@@ -8,7 +10,7 @@ class LegalTheme {
   static const muted = Color(0xFF9AA3B2);
   static const field = Color(0xFFF4F6FA);
 
-  static final today = DateTime(2026, 6, 22);
+  static final today = legalToday;
   static const monthAbbr = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'

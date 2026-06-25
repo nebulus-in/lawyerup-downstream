@@ -1,5 +1,11 @@
 import 'package:equatable/equatable.dart';
 
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+/// The app's "today" (date-only). Single source of truth so the calendar and
+/// the upcoming-hearings list agree on what counts as future.
+final legalToday = _dateOnly(DateTime.now());
+
 class CaseFile extends Equatable {
   final int id;
   final String name;
@@ -185,28 +191,33 @@ class Case extends Equatable {
   DateTime? get hearingDate => parseHearing(hearing);
 
   static DateTime? parseHearing(String h) {
-    final parts = h.split(' ');
-    if (parts.length != 2) return null;
+    final parts = h.replaceAll(',', '').split(' ');
+    if (parts.length < 2) return null;
     final m = _monthAbbr.indexOf(parts[0]);
     final d = int.tryParse(parts[1]);
     if (m < 0 || d == null) return null;
-    return DateTime(2026, m + 1, d);
+    // Legacy strings stored before hearings carried a year fall back to the
+    // current year.
+    final y = parts.length >= 3 ? int.tryParse(parts[2]) : null;
+    return DateTime(y ?? legalToday.year, m + 1, d);
   }
 
-  static String formatHearing(DateTime dt) => '${_monthAbbr[dt.month - 1]} ${dt.day}';
+  static String formatHearing(DateTime dt) =>
+      '${_monthAbbr[dt.month - 1]} ${dt.day}, ${dt.year}';
 
-  /// Cases with a hearing scheduled for today or later, ordered by date then
-  /// name, limited to those falling on the next [maxDays] distinct hearing days.
+  /// Cases with a hearing scheduled for [today] (date-only) or later, ordered
+  /// by date then name. [today] defaults to the app's pinned [legalToday] so
+  /// this list agrees with what the calendar marks as upcoming.
   ///
   /// Domain logic for "upcoming hearings" lives here rather than in a BLoC so
   /// the orchestration layer stays thin.
-  static List<Case> upcomingHearings(List<Case> cases, {int maxDays = 2}) {
-    final today = DateTime.now();
+  static List<Case> upcomingHearings(List<Case> cases, {DateTime? today}) {
+    final cutoff = _dateOnly(today ?? legalToday);
     final upcoming = <(Case, DateTime)>[];
 
     for (final c in cases) {
       final date = c.hearingDate;
-      if (date == null || date.isBefore(today)) continue;
+      if (date == null || date.isBefore(cutoff)) continue;
       upcoming.add((c, date));
     }
 
@@ -215,16 +226,7 @@ class Case extends Equatable {
       return byDate != 0 ? byDate : a.$1.name.compareTo(b.$1.name);
     });
 
-    final days = <DateTime>{};
-    final result = <Case>[];
-    for (final entry in upcoming) {
-      if (!days.contains(entry.$2)) {
-        if (days.length == maxDays) break;
-        days.add(entry.$2);
-      }
-      result.add(entry.$1);
-    }
-    return result;
+    return [for (final entry in upcoming) entry.$1];
   }
 
   @override

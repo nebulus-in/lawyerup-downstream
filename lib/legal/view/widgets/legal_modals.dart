@@ -1842,7 +1842,7 @@ class _EditCaseModalContentState extends State<_EditCaseModalContent> {
               onPick: () async {
                 final picked = await showDatePicker(
                   context: context,
-                  initialDate: _hearing ?? DateTime(2026, 6, 22),
+                  initialDate: _hearing ?? legalToday,
                   firstDate: DateTime(2000),
                   lastDate: DateTime(2100),
                 );

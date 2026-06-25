@@ -59,7 +59,10 @@ class LegalRepository {
     }
   }
 
-  static const List<Case> _initialCases = [
+  /// Seed cases for a fresh install. Hearing dates are anchored to today at
+  /// first-run only — once seeded they're persisted as concrete dates and never
+  /// recomputed.
+  static List<Case> get _initialCases => [
     Case(
       id: 1,
       name: 'Smith v. Johnson',
@@ -68,12 +71,12 @@ class LegalRepository {
       type: 'CIVIL',
 
       docs: 24,
-      hearing: 'Jun 28',
-      uncategorizedFiles: [
+      hearing: Case.formatHearing(legalToday.add(const Duration(days: 6))),
+      uncategorizedFiles: const [
         CaseFile(id: 1001, name: 'Initial_Consultation_Notes.docx', size: '1.2 MB', date: 'Jun 10'),
         CaseFile(id: 1002, name: 'Client_Retainer_Agreement.pdf', size: '450 KB', date: 'Jun 11'),
       ],
-      categories: [
+      categories: const [
         Category(
           id: 101,
           name: 'Pleadings',
@@ -122,11 +125,11 @@ class LegalRepository {
       type: 'CRIMINAL',
 
       docs: 17,
-      hearing: 'Jun 25',
-      uncategorizedFiles: [
+      hearing: Case.formatHearing(legalToday.add(const Duration(days: 3))),
+      uncategorizedFiles: const [
         CaseFile(id: 2001, name: 'Fee_Receipt.pdf', size: '120 KB', date: 'May 20'),
       ],
-      categories: [
+      categories: const [
         Category(
           id: 201,
           name: 'FIR',
