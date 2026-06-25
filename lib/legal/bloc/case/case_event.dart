@@ -17,6 +17,8 @@ class _CasesUpdated extends CaseEvent {
   List<Object?> get props => [cases];
 }
 
+class CaseErrorDismissed extends CaseEvent {}
+
 class CaseCreated extends CaseEvent {
   final String name;
   final String number;

@@ -6,6 +6,8 @@ abstract class CategoryEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class CategoryErrorDismissed extends CategoryEvent {}
+
 class CategoryAdded extends CategoryEvent {
   final int caseId;
   final String name;

@@ -19,10 +19,15 @@ class CategoryBloc extends Bloc<CategoryEvent, CategoryState> {
   CategoryBloc({required LegalRepository repository})
       : _repository = repository,
         super(const CategoryState()) {
+    on<CategoryErrorDismissed>(_onCategoryErrorDismissed);
     on<CategoryAdded>(_onCategoryAdded, transformer: droppable());
     on<CategoryRenamed>(_onCategoryRenamed, transformer: droppable());
     on<CategoryDeleted>(_onCategoryDeleted, transformer: droppable());
   }
+
+  void _onCategoryErrorDismissed(
+          CategoryErrorDismissed event, Emitter<CategoryState> emit) =>
+      emit(state.copyWith(errorMessage: null));
 
   Future<void> _onCategoryAdded(
           CategoryAdded event, Emitter<CategoryState> emit) =>

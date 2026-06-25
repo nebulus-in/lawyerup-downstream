@@ -25,6 +25,7 @@ class CaseBloc extends Bloc<CaseEvent, CaseState> {
         super(const CaseState()) {
     on<LoadCases>(_onLoadCases);
     on<_CasesUpdated>(_onCasesUpdated);
+    on<CaseErrorDismissed>(_onCaseErrorDismissed);
     on<CaseCreated>(_onCaseCreated, transformer: droppable());
     on<CaseUpdated>(_onCaseUpdated, transformer: droppable());
     on<CaseDeleted>(_onCaseDeleted, transformer: droppable());
@@ -54,6 +55,9 @@ class CaseBloc extends Bloc<CaseEvent, CaseState> {
   /// repository broadcasts a change, regardless of which BLoC triggered it.
   void _onCasesUpdated(_CasesUpdated event, Emitter<CaseState> emit) =>
       _emitCases(emit, event.cases);
+
+  void _onCaseErrorDismissed(CaseErrorDismissed event, Emitter<CaseState> emit) =>
+      emit(state.copyWith(errorMessage: null));
 
   /// Emits a success state for [cases], recomputing the derived upcoming
   /// hearings — the one place that shape is built.

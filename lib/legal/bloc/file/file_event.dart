@@ -6,6 +6,8 @@ abstract class FileEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+class FileErrorDismissed extends FileEvent {}
+
 class SelectionToggled extends FileEvent {
   final int id;
   const SelectionToggled(this.id);

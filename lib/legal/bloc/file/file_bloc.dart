@@ -22,6 +22,7 @@ class FileBloc extends Bloc<FileEvent, FileState> {
   FileBloc({required LegalRepository repository})
       : _repository = repository,
         super(const FileState()) {
+    on<FileErrorDismissed>(_onFileErrorDismissed);
     on<SelectionToggled>(_onSelectionToggled);
     on<SelectionCleared>(_onSelectionCleared);
     on<FileUploaded>(_onFileUploaded, transformer: droppable());
@@ -35,6 +36,9 @@ class FileBloc extends Bloc<FileEvent, FileState> {
     on<FileMoved>(_onFileMoved, transformer: droppable());
     on<FilesMoved>(_onFilesMoved, transformer: droppable());
   }
+
+  void _onFileErrorDismissed(FileErrorDismissed event, Emitter<FileState> emit) =>
+      emit(state.copyWith(errorMessage: null));
 
   void _onSelectionToggled(SelectionToggled event, Emitter<FileState> emit) {
     final updated = Set<int>.from(state.selectedFileIds);

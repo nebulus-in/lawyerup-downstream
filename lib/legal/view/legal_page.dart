@@ -59,9 +59,9 @@ class _LegalViewState extends State<LegalView> {
       // Every mutation BLoC surfaces failures the same way: a transient
       // errorMessage shown as a snack. One helper keeps the three in lockstep.
       listeners: [
-        _errorListener<CaseBloc, CaseState>((s) => s.errorMessage),
-        _errorListener<CategoryBloc, CategoryState>((s) => s.errorMessage),
-        _errorListener<FileBloc, FileState>((s) => s.errorMessage),
+        _errorListener<CaseBloc, CaseState>((s) => s.errorMessage, CaseErrorDismissed()),
+        _errorListener<CategoryBloc, CategoryState>((s) => s.errorMessage, CategoryErrorDismissed()),
+        _errorListener<FileBloc, FileState>((s) => s.errorMessage, FileErrorDismissed()),
       ],
       child: BarVisibilityScope(
         visible: _barsVisible,
@@ -104,16 +104,16 @@ class _LegalViewState extends State<LegalView> {
 }
 
 /// A [BlocListener] that snacks the transient [errorMessage] (read via [errorOf])
-/// whenever it appears or changes — the shared error-surfacing wiring for every
-/// mutation BLoC.
-BlocListener<B, S> _errorListener<B extends StateStreamable<S>, S>(
-    String? Function(S) errorOf) {
+/// whenever it appears. It immediately fires [dismissEvent] to clear the error 
+/// from the state, ensuring the UI stays in sync and can handle repeated errors.
+BlocListener<B, S> _errorListener<B extends Bloc<dynamic, S>, S>(
+    String? Function(S) errorOf, dynamic dismissEvent) {
   return BlocListener<B, S>(
-    listenWhen: (prev, curr) {
-      final err = errorOf(curr);
-      return err != null && err != errorOf(prev);
+    listenWhen: (prev, curr) => errorOf(curr) != null,
+    listener: (context, state) {
+      LegalModals.snack(context, errorOf(state)!);
+      context.read<B>().add(dismissEvent);
     },
-    listener: (context, state) => LegalModals.snack(context, errorOf(state)!),
   );
 }
 
