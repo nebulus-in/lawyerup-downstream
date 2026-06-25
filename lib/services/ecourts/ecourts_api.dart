@@ -97,37 +97,56 @@ class Cnr {
   }
 }
 
-/// A party/advocate/filing/FIR search request. All fields are optional; the
-/// API matches on whichever are supplied.
+/// A case search request. Every field is optional; the registry matches on
+/// whichever are supplied. Text fields are targeted ([partyName] → litigants,
+/// [advocateName], [judgeName]) or full-text ([query]); the rest narrow and
+/// order the matches.
 class CaseSearchQuery {
-  final String? partyName;
+  // Text — one of these is usually set, per the chosen search scope.
+  final String? query; // full-text across all fields
+  final String? partyName; // litigants (petitioners + respondents)
   final String? advocateName;
+  final String? judgeName;
   final String? filingNumber;
   final String? firNumber;
+
+  // Filters.
+  final List<String>? caseStatuses; // status codes, e.g. ['PENDING']
+  final DateTime? nextHearingFrom;
+  final DateTime? nextHearingTo;
   final String? courtCode;
   final int? year;
 
+  // Sort. [sortBy] is a registry field name; [sortOrder] is 'asc' or 'desc'.
+  final String? sortBy;
+  final String? sortOrder;
+
   const CaseSearchQuery({
+    this.query,
     this.partyName,
     this.advocateName,
+    this.judgeName,
     this.filingNumber,
     this.firNumber,
+    this.caseStatuses,
+    this.nextHearingFrom,
+    this.nextHearingTo,
     this.courtCode,
     this.year,
+    this.sortBy,
+    this.sortOrder,
   });
 
-  bool get isEmpty =>
-      (partyName ?? advocateName ?? filingNumber ?? firNumber)?.trim().isEmpty ??
-      true;
-
-  Map<String, dynamic> toQueryParameters() => {
-        if (partyName != null) 'party': partyName,
-        if (advocateName != null) 'advocate': advocateName,
-        if (filingNumber != null) 'filingNumber': filingNumber,
-        if (firNumber != null) 'firNumber': firNumber,
-        if (courtCode != null) 'court': courtCode,
-        if (year != null) 'year': year,
-      };
+  /// Nothing to search on: no text and no narrowing filter. (Sort alone only
+  /// orders an existing result set, so it doesn't make a query runnable.)
+  bool get isEmpty {
+    final hasText = [query, partyName, advocateName, judgeName, filingNumber, firNumber]
+        .any((s) => (s ?? '').trim().isNotEmpty);
+    final hasFilter = (caseStatuses?.isNotEmpty ?? false) ||
+        nextHearingFrom != null ||
+        nextHearingTo != null;
+    return !hasText && !hasFilter;
+  }
 }
 
 /// Page of search hits plus the total the query matched.

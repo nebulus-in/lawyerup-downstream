@@ -56,44 +56,79 @@ class MockEcourtsApi implements EcourtsApi {
     if (query.isEmpty) {
       return _latency(const CaseSearchResult(hits: [], total: 0), 200);
     }
-    final party = query.partyName?.toLowerCase().trim();
+    final full = query.query?.toLowerCase().trim();
     final advocate = query.advocateName?.toLowerCase().trim();
-    final filing = query.filingNumber?.toLowerCase().trim();
-    final fir = query.firNumber?.toLowerCase().trim();
+    final judge = query.judgeName?.toLowerCase().trim();
+    final party = query.partyName?.toLowerCase().trim();
+    final statuses =
+        (query.caseStatuses ?? const []).map((s) => s.toUpperCase()).toSet();
+    final from = query.nextHearingFrom;
+    final to = query.nextHearingTo;
+
+    bool has(String? term) => term != null && term.isNotEmpty;
 
     bool matches(EcourtsCase c) {
       final parties = [...c.petitioners, ...c.respondents];
-      if (party != null && party.isNotEmpty) {
-        if (!parties.any((p) => p.name.toLowerCase().contains(party))) {
-          return false;
-        }
+      if (has(full)) {
+        final haystack = [
+          c.title,
+          c.caseType,
+          c.registrationNumber,
+          c.filingNumber,
+          c.status.courtNumberAndJudge,
+          for (final p in parties) ...[p.name, p.advocate ?? ''],
+        ].join(' ').toLowerCase();
+        if (!haystack.contains(full!)) return false;
       }
-      if (advocate != null && advocate.isNotEmpty) {
-        if (!parties.any(
-            (p) => (p.advocate ?? '').toLowerCase().contains(advocate))) {
-          return false;
-        }
+      if (has(advocate) &&
+          !parties.any((p) => (p.advocate ?? '').toLowerCase().contains(advocate!))) {
+        return false;
       }
-      if (filing != null && filing.isNotEmpty) {
-        if (!c.filingNumber.toLowerCase().contains(filing)) return false;
+      if (has(judge) &&
+          !c.status.courtNumberAndJudge.toLowerCase().contains(judge!)) {
+        return false;
       }
-      if (fir != null && fir.isNotEmpty) {
-        if (!(c.fir?.firNumber.toLowerCase().contains(fir) ?? false)) {
-          return false;
-        }
+      if (has(party) &&
+          !parties.any((p) => p.name.toLowerCase().contains(party!))) {
+        return false;
       }
+      if (statuses.isNotEmpty &&
+          !statuses.any((s) => c.status.caseStatus.toUpperCase().contains(s))) {
+        return false;
+      }
+      final hearing = c.status.nextHearingDate;
+      if (from != null && (hearing == null || hearing.isBefore(from))) {
+        return false;
+      }
+      if (to != null && (hearing == null || hearing.isAfter(to))) return false;
       return true;
     }
 
-    final hits = _db.values.where(matches).map((c) => CaseSearchHit(
-          cnr: c.cnr,
-          caseNumber: c.registrationNumber,
-          title: c.title,
-          court: c.source,
-          caseStatus: c.status.caseStatus,
-        ));
-    final list = hits.toList();
-    return _latency(CaseSearchResult(hits: list, total: list.length), 460);
+    final list = _db.values.where(matches).toList();
+
+    if (query.sortBy != null) {
+      DateTime? key(EcourtsCase c) => switch (query.sortBy) {
+            'nextHearingDate' => c.status.nextHearingDate,
+            'filingDate' => c.filingDate,
+            'decisionDate' => c.status.decisionDate,
+            _ => null,
+          };
+      list.sort((a, b) {
+        final cmp = (key(a) ?? DateTime(0)).compareTo(key(b) ?? DateTime(0));
+        return query.sortOrder == 'asc' ? cmp : -cmp;
+      });
+    }
+
+    final hits = list
+        .map((c) => CaseSearchHit(
+              cnr: c.cnr,
+              caseNumber: c.registrationNumber,
+              title: c.title,
+              court: c.source,
+              caseStatus: c.status.caseStatus,
+            ))
+        .toList();
+    return _latency(CaseSearchResult(hits: hits, total: hits.length), 460);
   }
 
   @override

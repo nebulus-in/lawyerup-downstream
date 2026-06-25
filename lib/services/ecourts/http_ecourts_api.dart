@@ -63,21 +63,31 @@ class HttpEcourtsApi implements EcourtsApi {
   @override
   Future<CaseSearchResult> searchCases(CaseSearchQuery query) async {
     if (query.isEmpty) return const CaseSearchResult(hits: [], total: 0);
-    // The proxy exposes one full-text `query`; fold the structured fields into
-    // it, preferring whichever the caller filled in.
-    final q = [
-      query.partyName,
-      query.advocateName,
-      query.filingNumber,
-      query.firNumber,
-    ].firstWhere((s) => (s ?? '').trim().isNotEmpty, orElse: () => '')!;
-    final params = <String, dynamic>{'query': q.trim()};
-    if (query.courtCode != null) params['courtCodes'] = query.courtCode;
-    if (query.year != null) params['filingYear'] = '${query.year}';
 
-    // Clicking a CNR-less board entry resolves it through here; cache so a
-    // repeat tap doesn't re-search.
-    final key = 'search:${params['query']}:${query.courtCode ?? ''}:${query.year ?? ''}';
+    final params = <String, dynamic>{};
+    void put(String k, String? v) {
+      if (v != null && v.trim().isNotEmpty) params[k] = v.trim();
+    }
+
+    // Targeted text params map straight onto the registry's search fields.
+    put('query', query.query);
+    put('advocates', query.advocateName);
+    put('judges', query.judgeName);
+    put('litigants', query.partyName);
+    if ((query.caseStatuses ?? const []).isNotEmpty) {
+      params['caseStatuses'] = query.caseStatuses; // repeated array param
+    }
+    if (query.nextHearingFrom != null) {
+      params['nextHearingDateFrom'] = _ymd(query.nextHearingFrom!);
+    }
+    if (query.nextHearingTo != null) {
+      params['nextHearingDateTo'] = _ymd(query.nextHearingTo!);
+    }
+    put('sortBy', query.sortBy);
+    put('sortOrder', query.sortOrder);
+    if (query.courtCode != null) params['courtCodes'] = query.courtCode;
+
+    final key = 'search:${_stableKey(params)}';
     if (await _cacheGet(key) case final CaseSearchResult hit) return hit;
 
     final body = await _getJson('/api/partner/search', params: params);
@@ -464,9 +474,18 @@ class HttpEcourtsApi implements EcourtsApi {
   // --- HTTP plumbing -------------------------------------------------------
 
   Uri _uri(String path, [Map<String, dynamic>? params]) {
-    final qp = <String, String>{};
+    // Values may be a single scalar or an Iterable, which Uri repeats as
+    // `k=a&k=b` — how the registry takes array filters like caseStatuses.
+    final qp = <String, dynamic>{};
     params?.forEach((k, v) {
-      if (v != null) qp[k] = v.toString();
+      if (v == null) return;
+      if (v is Iterable) {
+        final items =
+            v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+        if (items.isNotEmpty) qp[k] = items;
+      } else {
+        qp[k] = v.toString();
+      }
     });
     return _base.replace(path: path, queryParameters: qp.isEmpty ? null : qp);
   }
@@ -587,5 +606,15 @@ List<EcourtsParty> _parties(List<String> names, List<String> advocates) => [
 
 String _ymd(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// A deterministic cache key for a query-param map: keys sorted, list values
+/// joined, so the same search always hits the same cache entry.
+String _stableKey(Map<String, dynamic> params) {
+  final keys = params.keys.toList()..sort();
+  return keys.map((k) {
+    final v = params[k];
+    return '$k=${v is Iterable ? v.join('+') : v}';
+  }).join('&');
+}
 
 void debugPrint(String s) => print(s);

@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import 'ecourts_state.dart';
+
 abstract class EcourtsEvent extends Equatable {
   const EcourtsEvent();
 
@@ -22,4 +24,16 @@ class EcourtsLookupRequested extends EcourtsEvent {
 
 class EcourtsResetRequested extends EcourtsEvent {
   const EcourtsResetRequested();
+}
+
+/// Run a search with the given [criteria] (scoped text, status, hearing range,
+/// sort). Criteria with nothing to match on clears the search and restores the
+/// board.
+class EcourtsSearchSubmitted extends EcourtsEvent {
+  final SearchCriteria criteria;
+
+  const EcourtsSearchSubmitted(this.criteria);
+
+  @override
+  List<Object?> get props => [criteria];
 }

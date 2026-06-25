@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -535,10 +537,1008 @@ class _Body extends StatelessWidget {
   }
 }
 
-// --- Idle: today's cause list -------------------------------------------------
+// --- Idle: search + today's cause list ----------------------------------------
 
+/// The idle view: a scoped search over the registry, with today's cause list
+/// as the resting state. Searching swaps the board for results; clearing brings
+/// it back. A chosen result hands off to the CNR lookup to open in full.
 class _IdleBody extends StatelessWidget {
   const _IdleBody({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final phase = context.select((EcourtsBloc b) => b.state.searchPhase);
+    final query =
+        context.select((EcourtsBloc b) => b.state.searchCriteria.text);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SearchPanel(),
+        const SizedBox(height: 18),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOut,
+          child: switch (phase) {
+            SearchPhase.idle => const _BoardSection(key: ValueKey('board')),
+            SearchPhase.loading =>
+              _SearchBusy(query: query, key: const ValueKey('searching')),
+            SearchPhase.error => const _SearchError(key: ValueKey('search-err')),
+            SearchPhase.done => const _SearchResults(key: ValueKey('results')),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// The search input cluster: a scoped query field, a filters button, and chips
+/// for whatever's active. The scope token leads the field — the same in-field
+/// label the CNR field uses, but here it's a control that picks which column of
+/// the register the text matches. The text stays sans (you're typing a person
+/// or a phrase), distinct from the CNR field's monospace.
+class _SearchPanel extends StatefulWidget {
+  const _SearchPanel();
+
+  @override
+  State<_SearchPanel> createState() => _SearchPanelState();
+}
+
+class _SearchPanelState extends State<_SearchPanel> {
+  SearchCriteria get _criteria =>
+      context.read<EcourtsBloc>().state.searchCriteria;
+
+  void _submit(SearchCriteria c) =>
+      context.read<EcourtsBloc>().add(EcourtsSearchSubmitted(c));
+
+  void _openConsole() {
+    final bloc = context.read<EcourtsBloc>();
+    FocusScope.of(context).unfocus();
+    _showSearchConsole(
+      context,
+      initial: bloc.state.searchCriteria,
+      recents: bloc.state.recentSearches,
+      onSubmit: _submit,
+    );
+  }
+
+  void _clear() {
+    FocusScope.of(context).unfocus();
+    _submit(_criteria.copyWith(text: ''));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final criteria = context.select((EcourtsBloc b) => b.state.searchCriteria);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.search_rounded, size: 16, color: LegalTheme.ink),
+            SizedBox(width: 7),
+            Text('Search the register',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: LegalTheme.ink)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text('Find a case by party, advocate or judge — no CNR needed.',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: LegalTheme.muted)),
+        const SizedBox(height: 12),
+        _SearchTrigger(
+          scope: criteria.scope,
+          query: criteria.text,
+          onTap: _openConsole,
+          onClear: criteria.text.trim().isEmpty ? null : _clear,
+        ),
+        _ActiveFilters(criteria: criteria, onChanged: _submit),
+      ],
+    );
+  }
+}
+
+/// The resting search affordance: a tappable bar that opens the search console.
+/// It looks like the field it replaces — leading scope token, the live query (or
+/// a scope hint) — but it's a button. A clear control appears when a search is
+/// live so a result set can be dropped without opening the console.
+class _SearchTrigger extends StatelessWidget {
+  final SearchScope scope;
+  final String query;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  const _SearchTrigger({
+    required this.scope,
+    required this.query,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasQuery = query.trim().isNotEmpty;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFDCE2EB)),
+          boxShadow: [
+            BoxShadow(
+              color: LegalTheme.ink.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _ScopeToken(scope: scope, onTap: onTap),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                hasQuery ? query : _scopeHint(scope),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: hasQuery ? 15 : 14,
+                  fontWeight: hasQuery ? FontWeight.w600 : FontWeight.w500,
+                  color: hasQuery ? LegalTheme.ink : const Color(0xFF9AA4B2),
+                ),
+              ),
+            ),
+            if (onClear != null)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onClear,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(Icons.close_rounded,
+                      size: 18, color: LegalTheme.muted),
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.search_rounded,
+                    size: 18, color: LegalTheme.muted),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The leading scope control — which register column the text matches. Echoes
+/// the CNR field's in-field label, but tappable, in accent, with a caret.
+class _ScopeToken extends StatelessWidget {
+  final SearchScope scope;
+  final VoidCallback onTap;
+  const _ScopeToken({required this.scope, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 7, 8),
+        decoration: BoxDecoration(
+          color: LegalTheme.blueBg,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_scopeLabel(scope),
+                style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: LegalTheme.blue)),
+            const SizedBox(width: 1),
+            const Icon(Icons.expand_more_rounded,
+                size: 15, color: LegalTheme.blue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FiltersButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _FiltersButton({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = count > 0;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: active ? LegalTheme.blue : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: active ? LegalTheme.blue : const Color(0xFFDCE2EB)),
+          boxShadow: [
+            BoxShadow(
+              color: (active ? LegalTheme.blue : LegalTheme.ink)
+                  .withValues(alpha: active ? 0.22 : 0.06),
+              blurRadius: active ? 16 : 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.tune_rounded,
+                size: 18, color: active ? Colors.white : LegalTheme.ink),
+            if (active) ...[
+              const SizedBox(width: 7),
+              Text('$count',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Removable chips for the filters currently narrowing the search. Tapping one
+/// drops just that filter and re-runs.
+class _ActiveFilters extends StatelessWidget {
+  final SearchCriteria criteria;
+  final void Function(SearchCriteria) onChanged;
+  const _ActiveFilters({required this.criteria, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[
+      for (final s in criteria.statuses)
+        _RemovableChip(
+          label: _statusLabel(s),
+          onRemove: () => onChanged(criteria.copyWith(
+              statuses: {...criteria.statuses}..remove(s))),
+        ),
+      if (criteria.hasHearingRange)
+        _RemovableChip(
+          label: 'Hearing ${_rangeLabel(criteria.hearingFrom, criteria.hearingTo)}',
+          onRemove: () =>
+              onChanged(criteria.copyWith(hearingFrom: null, hearingTo: null)),
+        ),
+      if (criteria.sortField != SortField.relevance)
+        _RemovableChip(
+          label:
+              '${_sortLabel(criteria.sortField)} ${criteria.sortDescending ? '↓' : '↑'}',
+          onRemove: () =>
+              onChanged(criteria.copyWith(sortField: SortField.relevance)),
+        ),
+    ];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(spacing: 8, runSpacing: 8, children: chips),
+    );
+  }
+}
+
+class _RemovableChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onRemove;
+  const _RemovableChip({required this.label, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onRemove,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(11, 7, 8, 7),
+        decoration: BoxDecoration(
+            color: LegalTheme.blueBg, borderRadius: BorderRadius.circular(9)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: LegalTheme.blue)),
+            const SizedBox(width: 5),
+            const Icon(Icons.close_rounded, size: 13, color: LegalTheme.blue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Search console (blurred pop-out) -----------------------------------------
+
+/// Opens the search console over the blurred board: an editable, autofocused
+/// field, inline scope, recent queries and an explicit Search button. The board
+/// behind it is the work; the console is a transient surface laid on top, so it
+/// reads as "the register, brought into focus" rather than another panel.
+///
+/// It takes plain callbacks (not the bloc) so it works pushed on the root
+/// navigator, like the filters sheet — [onSubmit] runs against the screen's bloc.
+void _showSearchConsole(
+  BuildContext context, {
+  required SearchCriteria initial,
+  required List<String> recents,
+  required void Function(SearchCriteria) onSubmit,
+}) {
+  final reduceMotion = MediaQuery.of(context).disableAnimations;
+  showGeneralDialog(
+    context: context,
+    barrierDismissible: false,
+    barrierColor: Colors.transparent,
+    transitionDuration:
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+    pageBuilder: (_, __, ___) =>
+        _SearchConsole(initial: initial, recents: recents, onSubmit: onSubmit),
+    transitionBuilder: (context, anim, _, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+      child: child,
+    ),
+  );
+}
+
+class _SearchConsole extends StatefulWidget {
+  final SearchCriteria initial;
+  final List<String> recents;
+  final void Function(SearchCriteria) onSubmit;
+
+  const _SearchConsole({
+    required this.initial,
+    required this.recents,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_SearchConsole> createState() => _SearchConsoleState();
+}
+
+class _SearchConsoleState extends State<_SearchConsole> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial.text);
+  late SearchCriteria _criteria = widget.initial;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _dismiss() => Navigator.of(context).pop();
+
+  /// Closes the console, then runs the search on the host bloc with [text].
+  void _run(String text) {
+    Navigator.of(context).pop();
+    widget.onSubmit(_criteria.copyWith(text: text));
+  }
+
+  void _openFilters() {
+    _showSearchFilters(
+      context,
+      _criteria.copyWith(text: _controller.text),
+      (next) => setState(() => _criteria = next),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _dismiss, // tap the blurred board to close
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          color: LegalTheme.ink.withValues(alpha: 0.18),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SingleChildScrollView(
+                  child: GestureDetector(
+                    onTap: () {}, // absorb taps on the card itself
+                    // showGeneralDialog gives no Material ancestor; the card's
+                    // TextField needs one. Transparent so the blur shows through.
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: _card(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _label = TextStyle(
+      fontSize: 10,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 1,
+      color: LegalTheme.muted);
+
+  Widget _card() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration:
+          LegalTheme.cardDecoration(radius: 22, blur: 30, opacity: 0.16, dy: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.search_rounded, size: 17, color: LegalTheme.ink),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Search the register',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: LegalTheme.ink)),
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _dismiss,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                      color: LegalTheme.field,
+                      borderRadius: BorderRadius.circular(9)),
+                  child: const Icon(Icons.close_rounded,
+                      size: 17, color: LegalTheme.muted),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text('Find a case by party, advocate or judge — no CNR needed.',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: LegalTheme.muted)),
+          const SizedBox(height: 14),
+          _field(),
+          const SizedBox(height: 16),
+          const Text('SEARCH BY', style: _label),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final s in SearchScope.values)
+                _ChoiceChip(
+                  label: _scopeLabel(s),
+                  selected: _criteria.scope == s,
+                  onTap: () =>
+                      setState(() => _criteria = _criteria.copyWith(scope: s)),
+                ),
+            ],
+          ),
+          if (widget.recents.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('RECENT', style: _label),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final q in widget.recents)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _run(q),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 11, vertical: 7),
+                      decoration: BoxDecoration(
+                          color: LegalTheme.field,
+                          borderRadius: BorderRadius.circular(9)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.history_rounded,
+                              size: 13, color: LegalTheme.muted),
+                          const SizedBox(width: 5),
+                          Text(q,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: LegalTheme.ink)),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _FiltersButton(count: _criteria.filterCount, onTap: _openFilters),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _run(_controller.text),
+                  child: Container(
+                    height: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: LegalTheme.blue,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                            color: LegalTheme.blue.withValues(alpha: 0.30),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8)),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Search',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_forward_rounded,
+                            color: Colors.white, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _field() {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: LegalTheme.field,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: LegalTheme.page),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 18, color: LegalTheme.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onSubmitted: _run,
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: LegalTheme.ink),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                hintText: _scopeHint(_criteria.scope),
+                hintStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF9AA4B2)),
+              ),
+            ),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, _) => value.text.isEmpty
+                ? const SizedBox.shrink()
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _controller.clear,
+                    child: const Icon(Icons.close_rounded,
+                        size: 18, color: LegalTheme.muted),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Filters sheet ------------------------------------------------------------
+
+void _showSearchFilters(
+  BuildContext context,
+  SearchCriteria current,
+  void Function(SearchCriteria) onApply,
+) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _SearchFiltersSheet(initial: current, onApply: onApply),
+  );
+}
+
+class _SearchFiltersSheet extends StatefulWidget {
+  final SearchCriteria initial;
+  final void Function(SearchCriteria) onApply;
+  const _SearchFiltersSheet({required this.initial, required this.onApply});
+
+  @override
+  State<_SearchFiltersSheet> createState() => _SearchFiltersSheetState();
+}
+
+class _SearchFiltersSheetState extends State<_SearchFiltersSheet> {
+  late Set<String> _statuses = {...widget.initial.statuses};
+  late DateTime? _from = widget.initial.hearingFrom;
+  late DateTime? _to = widget.initial.hearingTo;
+  late SortField _sort = widget.initial.sortField;
+  late bool _desc = widget.initial.sortDescending;
+
+  bool get _anyActive =>
+      _statuses.isNotEmpty ||
+      _from != null ||
+      _to != null ||
+      _sort != SortField.relevance;
+
+  void _toggleStatus(String s) => setState(
+      () => _statuses.contains(s) ? _statuses.remove(s) : _statuses.add(s));
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 5),
+      initialDateRange: (_from != null && _to != null)
+          ? DateTimeRange(start: _from!, end: _to!)
+          : null,
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context)
+              .colorScheme
+              .copyWith(primary: LegalTheme.blue),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _from = picked.start;
+        _to = picked.end;
+      });
+    }
+  }
+
+  void _clearAll() => setState(() {
+        _statuses = {};
+        _from = null;
+        _to = null;
+        _sort = SortField.relevance;
+        _desc = true;
+      });
+
+  void _apply() {
+    Navigator.pop(context);
+    widget.onApply(widget.initial.copyWith(
+      statuses: _statuses,
+      hearingFrom: _from,
+      hearingTo: _to,
+      sortField: _sort,
+      sortDescending: _desc,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: LegalTheme.sheetDecoration,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LegalModals.grabber(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text('Filters',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  if (_anyActive)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _clearAll,
+                      child: const Text('Clear all',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: LegalTheme.blue)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _FilterSection(
+                label: 'Status',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in const ['PENDING', 'DISPOSED'])
+                      _ChoiceChip(
+                        label: _statusLabel(s),
+                        selected: _statuses.contains(s),
+                        onTap: () => _toggleStatus(s),
+                      ),
+                  ],
+                ),
+              ),
+              _FilterSection(
+                label: 'Next hearing',
+                child: _DateRangeRow(
+                  from: _from,
+                  to: _to,
+                  onTap: _pickRange,
+                  onClear: (_from != null || _to != null)
+                      ? () => setState(() {
+                            _from = null;
+                            _to = null;
+                          })
+                      : null,
+                ),
+              ),
+              _FilterSection(
+                label: 'Sort by',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final f in SortField.values)
+                          _ChoiceChip(
+                            label: _sortLabel(f),
+                            selected: _sort == f,
+                            onTap: () => setState(() => _sort = f),
+                          ),
+                      ],
+                    ),
+                    if (_sort != SortField.relevance) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          _ChoiceChip(
+                            label: 'Newest first',
+                            selected: _desc,
+                            onTap: () => setState(() => _desc = true),
+                          ),
+                          _ChoiceChip(
+                            label: 'Oldest first',
+                            selected: !_desc,
+                            onTap: () => setState(() => _desc = false),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _apply,
+                child: Container(
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: LegalTheme.blue,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Text('Show results',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterSection extends StatelessWidget {
+  final String label;
+  final Widget child;
+  const _FilterSection({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(),
+            style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+                color: LegalTheme.muted)),
+        const SizedBox(height: 10),
+        child,
+        const SizedBox(height: 22),
+      ],
+    );
+  }
+}
+
+class _ChoiceChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ChoiceChip(
+      {required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? LegalTheme.blue : LegalTheme.field,
+          borderRadius: BorderRadius.circular(11),
+          border:
+              Border.all(color: selected ? LegalTheme.blue : LegalTheme.page),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : LegalTheme.ink)),
+      ),
+    );
+  }
+}
+
+class _DateRangeRow extends StatelessWidget {
+  final DateTime? from;
+  final DateTime? to;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+  const _DateRangeRow({
+    required this.from,
+    required this.to,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final set = from != null || to != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: LegalTheme.field,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: LegalTheme.page),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_rounded, size: 17, color: LegalTheme.muted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(_rangeLabel(from, to),
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: set ? LegalTheme.ink : LegalTheme.muted)),
+            ),
+            if (set && onClear != null)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onClear,
+                child: const Icon(Icons.close_rounded,
+                    size: 17, color: LegalTheme.muted),
+              )
+            else
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: LegalTheme.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Search vocabulary --------------------------------------------------------
+
+String _scopeLabel(SearchScope s) => switch (s) {
+      SearchScope.all => 'Anywhere',
+      SearchScope.advocate => 'Advocate',
+      SearchScope.judge => 'Judge',
+      SearchScope.party => 'Party',
+    };
+
+String _scopeHint(SearchScope s) => switch (s) {
+      SearchScope.all => 'Search the whole register',
+      SearchScope.advocate => 'Advocate name',
+      SearchScope.judge => 'Judge name',
+      SearchScope.party => 'Party name',
+    };
+
+String _statusLabel(String code) {
+  final c = code.toUpperCase();
+  if (c == 'PENDING') return 'Pending';
+  if (c == 'DISPOSED') return 'Disposed';
+  return code.isEmpty ? code : code[0] + code.substring(1).toLowerCase();
+}
+
+String _sortLabel(SortField f) => switch (f) {
+      SortField.relevance => 'Best match',
+      SortField.nextHearing => 'Next hearing',
+      SortField.filingDate => 'Filing date',
+      SortField.decisionDate => 'Decision date',
+    };
+
+String _shortDate(DateTime d) => '${d.day} ${LegalTheme.monthAbbr[d.month - 1]}';
+
+String _rangeLabel(DateTime? from, DateTime? to) {
+  if (from != null && to != null) {
+    return '${_shortDate(from)} – ${_shortDate(to)}';
+  }
+  if (from != null) return 'from ${_shortDate(from)}';
+  if (to != null) return 'until ${_shortDate(to)}';
+  return 'Any date';
+}
+
+/// Today's cause list — the idle resting state beneath the search field.
+class _BoardSection extends StatelessWidget {
+  const _BoardSection({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -556,7 +1556,9 @@ class _IdleBody extends StatelessWidget {
             const SizedBox(width: 7),
             const Text('Today on the board',
                 style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w800, color: LegalTheme.ink)),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: LegalTheme.ink)),
             const Spacer(),
             if (!loading)
               Text('${list.length} listed',
@@ -569,7 +1571,9 @@ class _IdleBody extends StatelessWidget {
         const SizedBox(height: 4),
         const Text('Matters scheduled across tracked courts. Tap to pull one up.',
             style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w500, color: LegalTheme.muted)),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: LegalTheme.muted)),
         const SizedBox(height: 12),
         if (loading)
           const _CauseListSkeleton()
@@ -588,6 +1592,296 @@ class _IdleBody extends StatelessWidget {
             );
           }),
       ],
+    );
+  }
+}
+
+/// Header for the search states: the magnifier, a status line, and a count.
+class _SearchHeader extends StatelessWidget {
+  final String query;
+  final String trailing;
+  const _SearchHeader({required this.query, required this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.manage_search_rounded,
+                size: 16, color: LegalTheme.ink),
+            const SizedBox(width: 7),
+            const Text('Search results',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: LegalTheme.ink)),
+            const Spacer(),
+            if (trailing.isNotEmpty)
+              Text(trailing,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: LegalTheme.muted)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        query.trim().isEmpty
+            ? const Text('Cases matching your filters',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: LegalTheme.muted))
+            : Text.rich(
+                TextSpan(
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: LegalTheme.muted),
+                  children: [
+                    const TextSpan(text: 'Cases matching '),
+                    TextSpan(
+                        text: '“$query”',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, color: LegalTheme.ink)),
+                  ],
+                ),
+              ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+}
+
+class _SearchBusy extends StatelessWidget {
+  final String query;
+  const _SearchBusy({required this.query, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SearchHeader(query: query, trailing: 'Searching…'),
+        const _CauseListSkeleton(),
+      ],
+    );
+  }
+}
+
+class _SearchResults extends StatelessWidget {
+  const _SearchResults({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final hits = context.select((EcourtsBloc b) => b.state.searchHits);
+    final query =
+        context.select((EcourtsBloc b) => b.state.searchCriteria.text);
+
+    if (hits.isEmpty) return _SearchEmpty(query: query);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SearchHeader(
+            query: query,
+            trailing: '${hits.length} ${hits.length == 1 ? 'case' : 'cases'}'),
+        ...hits.map((h) => _SearchResultRow(hit: h, query: query)),
+      ],
+    );
+  }
+}
+
+class _SearchResultRow extends StatelessWidget {
+  final CaseSearchHit hit;
+  final String query;
+  const _SearchResultRow({required this.hit, required this.query});
+
+  void _open(BuildContext context) {
+    if (Cnr.isValid(hit.cnr)) {
+      context.read<EcourtsBloc>().add(EcourtsLookupRequested(hit.cnr));
+    } else {
+      LegalModals.snack(
+          context, "This result has no record number on file yet.");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final disposed = hit.caseStatus.toLowerCase().contains('dispos');
+    final hasCnr = Cnr.isValid(hit.cnr);
+    final court = hit.court.trim();
+    final caseNo = hit.caseNumber.trim();
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _open(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration:
+            LegalTheme.cardDecoration(radius: 16, blur: 12, opacity: 0.05),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _highlighted(hit.title.isEmpty ? 'Unknown parties' : hit.title,
+                      query),
+                  const SizedBox(height: 3),
+                  if (court.isNotEmpty)
+                    Text(court,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: LegalTheme.muted)),
+                  if (caseNo.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(caseNo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontFamily: _mono,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: LegalTheme.muted)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (hit.caseStatus.trim().isNotEmpty)
+                  _StatusPill(
+                      label: disposed ? 'Disposed' : 'Pending',
+                      color: disposed ? _green : _amber),
+                const SizedBox(height: 8),
+                Icon(hasCnr ? Icons.chevron_right : Icons.info_outline_rounded,
+                    color: LegalTheme.muted, size: 18),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Renders [title] with each run of [query] lit in the accent — so the reader
+  /// sees at a glance why this case matched. Case-insensitive, whole-query.
+  Widget _highlighted(String title, String query) {
+    const base = TextStyle(
+        fontSize: 13.5, fontWeight: FontWeight.w700, color: LegalTheme.ink);
+    const mark = TextStyle(
+        fontSize: 13.5, fontWeight: FontWeight.w800, color: LegalTheme.blue);
+
+    final q = query.trim();
+    final spans = <TextSpan>[];
+    if (q.isEmpty) {
+      spans.add(TextSpan(text: title));
+    } else {
+      final lower = title.toLowerCase();
+      final needle = q.toLowerCase();
+      var i = 0;
+      while (i < title.length) {
+        final at = lower.indexOf(needle, i);
+        if (at < 0) {
+          spans.add(TextSpan(text: title.substring(i)));
+          break;
+        }
+        if (at > i) spans.add(TextSpan(text: title.substring(i, at)));
+        spans.add(TextSpan(
+            text: title.substring(at, at + needle.length), style: mark));
+        i = at + needle.length;
+      }
+    }
+
+    return Text.rich(TextSpan(style: base, children: spans),
+        maxLines: 2, overflow: TextOverflow.ellipsis);
+  }
+}
+
+class _SearchEmpty extends StatelessWidget {
+  final String query;
+  const _SearchEmpty({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SearchNotice(
+      icon: Icons.search_off_rounded,
+      title: 'No matches',
+      body: query.trim().isEmpty
+          ? 'No cases match these filters. Widen the date range or status, '
+              'or add a name to search.'
+          : 'No cases on file match “$query”. '
+              'Check the spelling, change the scope, or look it up by CNR above.',
+    );
+  }
+}
+
+class _SearchError extends StatelessWidget {
+  const _SearchError({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final message = context.select((EcourtsBloc b) => b.state.searchError);
+    return _SearchNotice(
+      icon: Icons.cloud_off_rounded,
+      title: 'Search failed',
+      body: message.isEmpty
+          ? 'Something went wrong. Try again in a moment.'
+          : message,
+    );
+  }
+}
+
+/// Shared empty/error card for the search states.
+class _SearchNotice extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  const _SearchNotice(
+      {required this.icon, required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
+      decoration:
+          LegalTheme.cardDecoration(radius: 20, blur: 14, opacity: 0.05),
+      child: Column(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+                color: LegalTheme.field,
+                borderRadius: BorderRadius.circular(16)),
+            child: Icon(icon, color: LegalTheme.muted, size: 24),
+          ),
+          const SizedBox(height: 12),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: LegalTheme.ink)),
+          const SizedBox(height: 5),
+          Text(body,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                  color: LegalTheme.muted)),
+        ],
+      ),
     );
   }
 }
