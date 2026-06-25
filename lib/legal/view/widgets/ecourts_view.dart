@@ -575,39 +575,20 @@ class _IdleBody extends StatelessWidget {
           const _CauseListSkeleton()
         else
           ...list.map((e) {
-            // Every listing opens its case detail: high-court rows carry a CNR
-            // and open directly; district rows (which usually omit the CNR) get
-            // one resolved from the case number. Only a row with neither a CNR
-            // nor a case number can't be opened.
-            final openable =
-                Cnr.isValid(e.cnr) || e.caseNumber.trim().isNotEmpty;
+            // A listing with a CNR opens its full live record. One without a CNR
+            // hasn't been assigned a record number yet, so there's nothing to
+            // pull — tapping it shows the basic details the cause list carries.
+            final hasCnr = Cnr.isValid(e.cnr);
             return _CauseRow(
               entry: e,
-              openable: openable,
-              onTap: () => openable
-                  ? context.read<EcourtsBloc>().add(EcourtsCauseEntryOpened(e))
-                  : _noId(context),
+              hasCnr: hasCnr,
+              onTap: () => hasCnr
+                  ? context.read<EcourtsBloc>().add(EcourtsLookupRequested(e.cnr))
+                  : _showListingSheet(context, e),
             );
           }),
       ],
     );
-  }
-
-  /// Explains why an unidentifiable listing (no CNR and no case number) can't
-  /// be opened, instead of failing the lookup with a misleading message.
-  void _noId(BuildContext context) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: const Text(
-            "This listing has no case number yet, so it can't be opened.",
-            style: TextStyle(fontWeight: FontWeight.w600)),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: LegalTheme.ink,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ));
   }
 }
 
@@ -615,19 +596,18 @@ class _CauseRow extends StatelessWidget {
   final CauseListEntry entry;
   final VoidCallback onTap;
 
-  /// Whether this listing carries a CNR and can be pulled up by number.
-  final bool openable;
+  /// Whether this listing carries a CNR. CNR rows pull the full record; rows
+  /// without one open the basic-details sheet instead.
+  final bool hasCnr;
 
   const _CauseRow({
     required this.entry,
     required this.onTap,
-    this.openable = true,
+    this.hasCnr = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final time = entry.time.trim();
-    final hasTime = time.isNotEmpty;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -637,29 +617,6 @@ class _CauseRow extends StatelessWidget {
         decoration: LegalTheme.cardDecoration(radius: 16, blur: 12, opacity: 0.05),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              decoration: BoxDecoration(
-                  color: LegalTheme.field,
-                  borderRadius: BorderRadius.circular(11)),
-              child: Column(
-                children: [
-                  Text(hasTime ? time.split(' ').first : '#${entry.serial}',
-                      style: const TextStyle(
-                          fontFamily: _mono,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: LegalTheme.ink)),
-                  Text(hasTime ? time.split(' ').last : 'item',
-                      style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: LegalTheme.muted)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -681,25 +638,219 @@ class _CauseRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            if (openable)
+            if (hasCnr)
               const Icon(Icons.chevron_right, color: LegalTheme.muted, size: 18)
             else
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                 decoration: BoxDecoration(
-                    color: LegalTheme.field,
+                    color: _amberBg,
                     borderRadius: BorderRadius.circular(7)),
-                child: const Text('No ID',
+                child: const Text('No CNR',
                     style: TextStyle(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w800,
-                        color: LegalTheme.muted)),
+                        color: _amber)),
               ),
           ],
         ),
       ),
     );
   }
+}
+
+// --- Listing without a CNR ----------------------------------------------------
+
+/// Opens the basic details a cause-list listing carries. Used for listings the
+/// registry hasn't assigned a CNR to yet: there's no record to pull, so rather
+/// than guess one we show what the cause list holds and say a CNR is pending.
+void _showListingSheet(BuildContext context, CauseListEntry entry) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _ListingSheet(entry: entry),
+  );
+}
+
+class _ListingSheet extends StatelessWidget {
+  final CauseListEntry entry;
+  const _ListingSheet({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = entry.title.trim();
+    // Only the fields the cause list actually carries — no blank rows.
+    final facts = <(String, String, bool)>[
+      if (entry.serial > 0) ('Item', '${entry.serial}', false),
+      if (entry.caseNumber.trim().isNotEmpty)
+        ('Case no.', entry.caseNumber.trim(), true),
+      if (entry.purpose.trim().isNotEmpty)
+        ('Purpose', entry.purpose.trim(), false),
+      if (entry.court.trim().isNotEmpty) ('Court', entry.court.trim(), false),
+      if (entry.judge.trim().isNotEmpty) ('Before', entry.judge.trim(), false),
+      if (entry.time.trim().isNotEmpty) ('Listed', entry.time.trim(), false),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      decoration: LegalTheme.sheetDecoration,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LegalModals.grabber(),
+          const SizedBox(height: 16),
+          const Text('LISTING',
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                  color: LegalTheme.muted)),
+          const SizedBox(height: 6),
+          Text(title.isEmpty ? 'Untitled listing' : title,
+              style: const TextStyle(
+                  fontSize: 18,
+                  height: 1.25,
+                  fontWeight: FontWeight.w800,
+                  color: LegalTheme.ink)),
+          const SizedBox(height: 16),
+          const _PendingCnrPlate(),
+          if (facts.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              decoration: LegalTheme.cardDecoration(
+                  radius: 18, blur: 14, opacity: 0.06),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Column(
+                children: [
+                  for (var i = 0; i < facts.length; i++)
+                    _FactRow(
+                      label: facts[i].$1,
+                      value: facts[i].$2,
+                      mono: facts[i].$3,
+                      last: i == facts.length - 1,
+                    ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  size: 15, color: LegalTheme.muted),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                    'Once the court assigns a CNR, you can pull the full case '
+                    'record here.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                        color: LegalTheme.muted)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The signature [_CnrPlate], inverted: where a resolved case shows its dark
+/// CNR plate, a pending listing shows the same plate with the record number
+/// ghosted out and stamped "Not assigned".
+class _PendingCnrPlate extends StatelessWidget {
+  const _PendingCnrPlate();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 16, 18),
+      decoration: BoxDecoration(
+        color: LegalTheme.ink,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: LegalTheme.ink.withValues(alpha: 0.28),
+              blurRadius: 22,
+              offset: const Offset(0, 10)),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('CNR',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                      color: Color(0xFF6B7689))),
+              Spacer(),
+              _StatusPill(label: 'Not assigned', color: _amber, onDark: true),
+            ],
+          ),
+          SizedBox(height: 14),
+          // The three CNR blocks (6-6-4 chars), ghosted to read as "pending".
+          Row(
+            children: [
+              _GhostBlock(width: 86),
+              _GhostDot(),
+              _GhostBlock(width: 86),
+              _GhostDot(),
+              _GhostBlock(width: 58),
+            ],
+          ),
+          SizedBox(height: 14),
+          Text(
+              "This matter is on the board, but the court hasn't issued a record "
+              'number for it yet.',
+              style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8A94A6))),
+        ],
+      ),
+    );
+  }
+}
+
+class _GhostBlock extends StatelessWidget {
+  final double width;
+  const _GhostBlock({required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 20,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF3A4356)),
+      ),
+    );
+  }
+}
+
+class _GhostDot extends StatelessWidget {
+  const _GhostDot();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 6),
+        child: Text('·',
+            style: TextStyle(
+                color: Color(0xFF4C5566),
+                fontSize: 18,
+                fontWeight: FontWeight.w700)),
+      );
 }
 
 // --- Result -------------------------------------------------------------------

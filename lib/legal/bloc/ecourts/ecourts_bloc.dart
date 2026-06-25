@@ -1,7 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../services/ecourts/ecourts_api.dart';
-import '../../../services/ecourts/ecourts_models.dart';
 import 'ecourts_event.dart';
 import 'ecourts_state.dart';
 
@@ -11,7 +10,6 @@ class EcourtsBloc extends Bloc<EcourtsEvent, EcourtsState> {
   EcourtsBloc(this._api) : super(const EcourtsState()) {
     on<EcourtsCauseListRequested>(_onCauseListRequested);
     on<EcourtsLookupRequested>(_onLookupRequested);
-    on<EcourtsCauseEntryOpened>(_onCauseEntryOpened);
     on<EcourtsResetRequested>(_onResetRequested);
 
     add(const EcourtsCauseListRequested());
@@ -60,48 +58,6 @@ class EcourtsBloc extends Bloc<EcourtsEvent, EcourtsState> {
           status: EcourtsStatus.invalid, result: null, message: e.message));
     } on CaseNotFoundException {
       emit(state.copyWith(status: EcourtsStatus.notFound, result: null));
-    } on EcourtsException catch (e) {
-      emit(state.copyWith(
-          status: EcourtsStatus.error, result: null, message: e.message));
-    }
-  }
-
-  Future<void> _onCauseEntryOpened(
-    EcourtsCauseEntryOpened event,
-    Emitter<EcourtsState> emit,
-  ) async {
-    final entry = event.entry;
-    if (Cnr.isValid(entry.cnr)) {
-      add(EcourtsLookupRequested(entry.cnr));
-      return;
-    }
-
-    final number = entry.caseNumber.trim();
-    final probe = number.isNotEmpty
-        ? CaseSearchQuery(filingNumber: number)
-        : CaseSearchQuery(partyName: entry.title.trim());
-    if (probe.isEmpty) {
-      emit(state.copyWith(
-          status: EcourtsStatus.notFound, queryCnr: '', result: null));
-      return;
-    }
-
-    emit(state.copyWith(
-        status: EcourtsStatus.loading,
-        queryCnr: '',
-        result: null,
-        message: null));
-    try {
-      final found = await _api.searchCases(probe);
-      final cnr = found.hits
-          .map((h) => h.cnr)
-          .firstWhere((c) => Cnr.isValid(c), orElse: () => '');
-      if (cnr.isEmpty) {
-        emit(state.copyWith(
-            status: EcourtsStatus.notFound, queryCnr: number, result: null));
-        return;
-      }
-      add(EcourtsLookupRequested(cnr));
     } on EcourtsException catch (e) {
       emit(state.copyWith(
           status: EcourtsStatus.error, result: null, message: e.message));
